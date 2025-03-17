@@ -131,7 +131,8 @@ def configure_alerts(student_name, db):
                 'behavior_threshold': behavior_threshold,
                 'red_threshold': red_threshold,
                 'trend_threshold': trend_threshold,
-                'notify_on_prediction': notify_on_prediction
+                'notify_on_prediction': notify_on_prediction,
+                'notification_enabled': False  # Disable notifications by default
             }
             alert_system.create_alert_config(student.id, config_data)
             st.success("Alert configuration created successfully!")

@@ -52,6 +52,8 @@ class AlertConfiguration(Base):
     trend_threshold = Column(Float)  # Threshold for negative behavior trend
     is_active = Column(Boolean, default=True)
     notify_on_prediction = Column(Boolean, default=True)  # Alert on predicted behaviors
+    notification_phone = Column(String)  # Phone number for SMS notifications
+    notification_enabled = Column(Boolean, default=True)  # Enable/disable notifications
 
     # Relationship
     student = relationship("Student", back_populates="alert_configs")
@@ -66,6 +68,7 @@ class Alert(Base):
     alert_type = Column(String)  # 'behavior_score', 'red_count', 'trend'
     value = Column(Float)  # The value that triggered the alert
     is_prediction = Column(Boolean, default=False)  # Whether this is a predicted alert
+    notification_sent = Column(Boolean, default=False)  # Track if notification was sent
 
     # Relationship
     configuration = relationship("AlertConfiguration", back_populates="alerts")

@@ -1,7 +1,6 @@
 from datetime import datetime
 from sqlalchemy.orm import Session
 from models import AlertConfiguration, Alert, Student
-import numpy as np
 
 class AlertSystem:
     def __init__(self, db: Session):
@@ -17,7 +16,8 @@ class AlertSystem:
             red_threshold=config_data.get('red_threshold', 3),
             trend_threshold=config_data.get('trend_threshold', -0.5),
             is_active=config_data.get('is_active', True),
-            notify_on_prediction=config_data.get('notify_on_prediction', True)
+            notify_on_prediction=config_data.get('notify_on_prediction', True),
+            notification_enabled=config_data.get('notification_enabled', False)
         )
         self.db.add(config)
         self.db.commit()
@@ -73,7 +73,8 @@ class AlertSystem:
             triggered_at=datetime.now().date(),
             alert_type=alert_type,
             value=value,
-            is_prediction=is_prediction
+            is_prediction=is_prediction,
+            notification_sent=False  # Initialize as not sent
         )
         self.db.add(alert)
         self.db.commit()
@@ -85,10 +86,10 @@ class AlertSystem:
         query = self.db.query(Alert).join(AlertConfiguration).filter(
             AlertConfiguration.student_id == student_id
         )
-        
+
         if not include_predictions:
             query = query.filter(Alert.is_prediction == False)
-            
+
         return query.order_by(Alert.triggered_at.desc()).all()
 
     def get_active_alerts(self, student_id: int) -> list:

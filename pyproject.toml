@@ -13,5 +13,6 @@ dependencies = [
     "seaborn>=0.13.2",
     "sqlalchemy>=2.0.39",
     "streamlit>=1.43.2",
+    "twilio>=9.5.0",
     "xgboost>=3.0.0",
 ]
