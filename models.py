@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, Float, Date, String, ForeignKey, Boolean
+from sqlalchemy import Column, Integer, Float, Date, String, ForeignKey, Boolean, DateTime, Text
 from sqlalchemy.orm import relationship
 from database import Base
 
@@ -9,6 +9,7 @@ class Student(Base):
     name = Column(String, index=True)
     behaviors = relationship("BehaviorRecord", back_populates="student")
     alert_configs = relationship("AlertConfiguration", back_populates="student")
+    medications = relationship("MedicationRecord", back_populates="student")
 
 class BehaviorRecord(Base):
     __tablename__ = "behavior_records"
@@ -72,3 +73,33 @@ class Alert(Base):
 
     # Relationship
     configuration = relationship("AlertConfiguration", back_populates="alerts")
+
+class MedicationRecord(Base):
+    __tablename__ = "medication_records"
+
+    id = Column(Integer, primary_key=True, index=True)
+    student_id = Column(Integer, ForeignKey("students.id"))
+    medication_name = Column(String, index=True)
+    dosage = Column(String)
+    frequency = Column(String)  # e.g., "Once daily", "Twice daily"
+    start_date = Column(Date)
+    end_date = Column(Date, nullable=True)  # null if currently active
+    notes = Column(Text, nullable=True)
+    is_active = Column(Boolean, default=True)
+
+    # Relationships
+    student = relationship("Student", back_populates="medications")
+    logs = relationship("MedicationLog", back_populates="medication")
+
+class MedicationLog(Base):
+    __tablename__ = "medication_logs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    medication_id = Column(Integer, ForeignKey("medication_records.id"))
+    timestamp = Column(DateTime, index=True)
+    status = Column(String)  # "taken", "missed", "late"
+    reason_if_missed = Column(String, nullable=True)
+    notes = Column(Text, nullable=True)
+
+    # Relationship
+    medication = relationship("MedicationRecord", back_populates="logs")

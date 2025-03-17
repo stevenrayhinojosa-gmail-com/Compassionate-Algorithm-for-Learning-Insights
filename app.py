@@ -6,8 +6,11 @@ from model_trainer import ModelTrainer
 import matplotlib.pyplot as plt
 import seaborn as sns
 from database import SessionLocal, engine
-from models import Base, Student, BehaviorRecord, TimeSlotBehavior, AlertConfiguration
-from datetime import datetime
+from models import (
+    Base, Student, BehaviorRecord, TimeSlotBehavior, AlertConfiguration,
+    MedicationRecord, MedicationLog
+)
+from datetime import datetime, date
 from alert_system import AlertSystem
 
 # Create database tables
@@ -160,6 +163,140 @@ def display_alerts(student_name, db):
                     st.write("(Predicted)")
                 st.markdown("</p>", unsafe_allow_html=True)
 
+def manage_medications(student_name, db):
+    """Manage student medications"""
+    st.header("Medication Management")
+
+    # Get or create student
+    student = db.query(Student).filter(Student.name == student_name).first()
+    if not student:
+        st.warning("Please save some behavior data first to manage medications.")
+        return
+
+    # Display current medications
+    current_meds = db.query(MedicationRecord).filter(
+        MedicationRecord.student_id == student.id,
+        MedicationRecord.is_active == True
+    ).all()
+
+    if current_meds:
+        st.subheader("Current Medications")
+        for med in current_meds:
+            with st.expander(f"📋 {med.medication_name}"):
+                st.write(f"Dosage: {med.dosage}")
+                st.write(f"Frequency: {med.frequency}")
+                st.write(f"Started: {med.start_date}")
+                if med.notes:
+                    st.write(f"Notes: {med.notes}")
+
+                # Option to mark medication as discontinued
+                if st.button(f"Discontinue {med.medication_name}", key=f"disc_{med.id}"):
+                    med.is_active = False
+                    med.end_date = date.today()
+                    db.commit()
+                    st.success(f"{med.medication_name} marked as discontinued.")
+                    st.rerun()
+
+    # Form to add new medication
+    st.subheader("Add New Medication")
+    with st.form("new_medication_form"):
+        med_name = st.text_input("Medication Name")
+        dosage = st.text_input("Dosage (e.g., '10mg')")
+        frequency = st.selectbox(
+            "Frequency",
+            ["Once daily", "Twice daily", "Three times daily", "As needed", "Other"]
+        )
+        if frequency == "Other":
+            frequency = st.text_input("Specify frequency")
+
+        start_date = st.date_input("Start Date")
+        notes = st.text_area("Notes (optional)")
+
+        if st.form_submit_button("Add Medication"):
+            new_med = MedicationRecord(
+                student_id=student.id,
+                medication_name=med_name,
+                dosage=dosage,
+                frequency=frequency,
+                start_date=start_date,
+                notes=notes,
+                is_active=True
+            )
+            db.add(new_med)
+            db.commit()
+            st.success("Medication added successfully!")
+            st.rerun()
+
+    # Medication Log Section
+    st.subheader("Medication Log")
+
+    # Log missed medication
+    with st.expander("Log Missed Medication"):
+        active_meds = [(med.id, med.medication_name) for med in current_meds]
+        if active_meds:
+            med_id = st.selectbox(
+                "Select Medication",
+                options=[m[0] for m in active_meds],
+                format_func=lambda x: next(m[1] for m in active_meds if m[0] == x)
+            )
+            missed_date = st.date_input("Date Missed")
+            reason = st.text_input("Reason for missing")
+            notes = st.text_area("Additional Notes")
+
+            if st.button("Log Missed Dose"):
+                log = MedicationLog(
+                    medication_id=med_id,
+                    timestamp=datetime.combine(missed_date, datetime.min.time()),
+                    status="missed",
+                    reason_if_missed=reason,
+                    notes=notes
+                )
+                db.add(log)
+                db.commit()
+                st.success("Missed medication logged successfully!")
+        else:
+            st.info("No active medications to log.")
+
+    # Display medication history
+    st.subheader("Medication History")
+    all_meds = db.query(MedicationRecord).filter(
+        MedicationRecord.student_id == student.id
+    ).all()
+
+    if all_meds:
+        for med in all_meds:
+            with st.expander(
+                f"{'🟢' if med.is_active else '⚫'} {med.medication_name} "
+                f"({med.start_date} - {med.end_date or 'Present'})"
+            ):
+                st.write(f"Dosage: {med.dosage}")
+                st.write(f"Frequency: {med.frequency}")
+                if med.notes:
+                    st.write(f"Notes: {med.notes}")
+
+                # Display medication logs
+                logs = db.query(MedicationLog).filter(
+                    MedicationLog.medication_id == med.id
+                ).order_by(MedicationLog.timestamp.desc()).all()
+
+                if logs:
+                    st.write("### Medication Logs")
+                    for log in logs:
+                        status_color = {
+                            "taken": "🟢",
+                            "missed": "🔴",
+                            "late": "🟡"
+                        }.get(log.status, "⚪")
+                        st.write(
+                            f"{status_color} {log.timestamp.strftime('%Y-%m-%d %H:%M')} - "
+                            f"{log.status.title()}"
+                        )
+                        if log.reason_if_missed:
+                            st.write(f"Reason: {log.reason_if_missed}")
+                        if log.notes:
+                            st.write(f"Notes: {log.notes}")
+
+
 def main():
     st.title("Student Behavior Analysis and Forecasting")
 
@@ -190,161 +327,167 @@ def main():
 
     uploaded_file = st.file_uploader("Upload behavior data CSV", type=['csv'])
 
-    if uploaded_file is not None:
-        try:
-            # Load and process data
-            data = pd.read_csv(uploaded_file)
-            processor = DataProcessor(data)
-            processed_data = processor.process_data()
-            summary_stats = processor.get_summary_stats()
+    # Add Medication Management tab
+    tab1, tab2 = st.tabs(["Behavior Analysis", "Medication Management"])
 
-            # Store data in database
-            if st.button("Save Data to Database"):
-                if store_behavior_data(processed_data, student_name):
-                    st.success("Data successfully saved to database!")
-                else:
-                    st.error("Failed to save data to database.")
+    with tab1:
+        if uploaded_file is not None:
+            try:
+                # Load and process data
+                data = pd.read_csv(uploaded_file)
+                processor = DataProcessor(data)
+                processed_data = processor.process_data()
+                summary_stats = processor.get_summary_stats()
 
-            # Display summary statistics
-            st.header("Summary Statistics")
-            col1, col2, col3 = st.columns(3)
+                # Store data in database
+                if st.button("Save Data to Database"):
+                    if store_behavior_data(processed_data, student_name):
+                        st.success("Data successfully saved to database!")
+                    else:
+                        st.error("Failed to save data to database.")
 
-            with col1:
-                st.metric("Total Days Recorded", summary_stats['total_days'])
-                st.metric("Average Score", f"{summary_stats['avg_score']:.2f}")
+                # Display summary statistics
+                st.header("Summary Statistics")
+                col1, col2, col3 = st.columns(3)
 
-            with col2:
-                st.metric("Best Day", summary_stats['best_day'].strftime('%Y-%m-%d'))
-                st.metric("Most Challenging Day", 
-                         summary_stats['challenging_day'].strftime('%Y-%m-%d'))
+                with col1:
+                    st.metric("Total Days Recorded", summary_stats['total_days'])
+                    st.metric("Average Score", f"{summary_stats['avg_score']:.2f}")
 
-            with col3:
-                st.metric("Weekly Trend", 
-                         f"{summary_stats['weekly_trend']:.2f}",
-                         delta=summary_stats['weekly_trend'])
+                with col2:
+                    st.metric("Best Day", summary_stats['best_day'].strftime('%Y-%m-%d'))
+                    st.metric("Most Challenging Day", 
+                             summary_stats['challenging_day'].strftime('%Y-%m-%d'))
 
-            # Display recent data
-            st.header("Recent Behavior Records")
-            st.dataframe(processed_data.tail().style.format({
-                'behavior_score': '{:.2f}',
-                'date': lambda x: x.strftime('%Y-%m-%d'),
-                'rolling_avg_7d': '{:.2f}',
-                'weekly_improvement': '{:.2f}'
-            }))
+                with col3:
+                    st.metric("Weekly Trend", 
+                             f"{summary_stats['weekly_trend']:.2f}",
+                             delta=summary_stats['weekly_trend'])
 
-            # Visualizations
-            st.header("Behavior Patterns")
-            col1, col2 = st.columns(2)
+                # Display recent data
+                st.header("Recent Behavior Records")
+                st.dataframe(processed_data.tail().style.format({
+                    'behavior_score': '{:.2f}',
+                    'date': lambda x: x.strftime('%Y-%m-%d'),
+                    'rolling_avg_7d': '{:.2f}',
+                    'weekly_improvement': '{:.2f}'
+                }))
 
-            with col1:
-                st.subheader("Weekly Patterns")
-                st.pyplot(plot_weekly_patterns(processed_data))
+                # Visualizations
+                st.header("Behavior Patterns")
+                col1, col2 = st.columns(2)
 
-            with col2:
-                st.subheader("Behavior Distribution")
-                fig, ax = plt.subplots(figsize=(10, 6))
-                behavior_counts = processor.get_behavior_distribution()
-                colors = ['red', 'yellow', 'green']
-                sns.barplot(x=behavior_counts.index, y=behavior_counts.values, palette=colors)
-                plt.title("Distribution of Behavior Types")
-                plt.xlabel("Behavior Category")
-                plt.ylabel("Count")
-                st.pyplot(fig)
+                with col1:
+                    st.subheader("Weekly Patterns")
+                    st.pyplot(plot_weekly_patterns(processed_data))
 
-            st.header("Behavior Trends")
-            st.pyplot(plot_behavior_trends(processed_data))
-
-            # Model training and prediction
-            st.header("Behavior Prediction")
-            if st.button("Train Model and Generate Predictions"):
-                with st.spinner("Training model and generating predictions..."):
-                    trainer = ModelTrainer(processed_data)
-                    metrics, predictions = trainer.train_and_predict()
-
-                    # Display metrics
-                    st.subheader("Model Performance")
-                    col1, col2, col3 = st.columns(3)
-                    col1.metric("Mean Absolute Error", f"{metrics['mae']:.3f}")
-                    col2.metric("Mean Squared Error", f"{metrics['mse']:.3f}")
-                    col3.metric("R² Score", f"{metrics['r2']:.3f}")
-
-                    # Plot predictions
-                    st.subheader("Prediction Results")
-                    fig, ax = plt.subplots(figsize=(12, 6))
-
-                    # Plot historical data
-                    historical_data = predictions[predictions['actual'].notna()]
-                    plt.plot(historical_data['date'], historical_data['actual'], 
-                            label='Actual', alpha=0.7)
-                    plt.plot(historical_data['date'], historical_data['predicted'], 
-                            label='Historical Predictions', alpha=0.7)
-
-                    # Plot future predictions
-                    future_data = predictions[predictions['actual'].isna()]
-                    plt.plot(future_data['date'], future_data['predicted'], 
-                            label='24-Hour Forecast', linestyle='--', alpha=0.7)
-
-                    # Add confidence interval for future predictions
-                    std_dev = processed_data['rolling_std_7d'].mean()
-                    plt.fill_between(
-                        future_data['date'],
-                        future_data['predicted'] - std_dev,
-                        future_data['predicted'] + std_dev,
-                        alpha=0.2,
-                        label='Forecast Uncertainty'
-                    )
-
-                    plt.legend()
-                    plt.title("Behavior Score: Historical Data and 24-Hour Forecast")
-                    plt.xlabel("Date/Time")
-                    plt.ylabel("Behavior Score")
-                    plt.xticks(rotation=45)
+                with col2:
+                    st.subheader("Behavior Distribution")
+                    fig, ax = plt.subplots(figsize=(10, 6))
+                    behavior_counts = processor.get_behavior_distribution()
+                    colors = ['red', 'yellow', 'green']
+                    sns.barplot(x=behavior_counts.index, y=behavior_counts.values, palette=colors)
+                    plt.title("Distribution of Behavior Types")
+                    plt.xlabel("Behavior Category")
+                    plt.ylabel("Count")
                     st.pyplot(fig)
 
-                    # Display future predictions table
-                    st.subheader("24-Hour Behavior Forecast")
-                    future_predictions = future_data.copy()
-                    future_predictions['hour'] = future_predictions['date'].dt.strftime('%I:00 %p')
-                    future_predictions['predicted_score'] = future_predictions['predicted'].round(2)
-                    st.dataframe(
-                        future_predictions[['hour', 'predicted_score']],
-                        hide_index=True
-                    )
+                st.header("Behavior Trends")
+                st.pyplot(plot_behavior_trends(processed_data))
 
-                    # Check for predicted alerts
-                    student = db.query(Student).filter(Student.name == student_name).first()
-                    if student:
+                # Model training and prediction
+                st.header("Behavior Prediction")
+                if st.button("Train Model and Generate Predictions"):
+                    with st.spinner("Training model and generating predictions..."):
+                        trainer = ModelTrainer(processed_data)
+                        metrics, predictions = trainer.train_and_predict()
+
+                        # Display metrics
+                        st.subheader("Model Performance")
+                        col1, col2, col3 = st.columns(3)
+                        col1.metric("Mean Absolute Error", f"{metrics['mae']:.3f}")
+                        col2.metric("Mean Squared Error", f"{metrics['mse']:.3f}")
+                        col3.metric("R² Score", f"{metrics['r2']:.3f}")
+
+                        # Plot predictions
+                        st.subheader("Prediction Results")
+                        fig, ax = plt.subplots(figsize=(12, 6))
+
+                        # Plot historical data
+                        historical_data = predictions[predictions['actual'].notna()]
+                        plt.plot(historical_data['date'], historical_data['actual'], 
+                                label='Actual', alpha=0.7)
+                        plt.plot(historical_data['date'], historical_data['predicted'], 
+                                label='Historical Predictions', alpha=0.7)
+
+                        # Plot future predictions
                         future_data = predictions[predictions['actual'].isna()]
-                        if not future_data.empty:
-                            alert_system.check_alerts(
-                                student.id,
-                                {
-                                    'behavior_score': future_data['predicted'].iloc[-1],
-                                    'red_count': processed_data['red_count'].mean(),
-                                    'behavior_trend': future_data['predicted'].diff().iloc[-1]
-                                },
-                                is_prediction=True
-                            )
+                        plt.plot(future_data['date'], future_data['predicted'], 
+                                label='24-Hour Forecast', linestyle='--', alpha=0.7)
 
-            # Check for alerts based on processed data
-            student = db.query(Student).filter(Student.name == student_name).first()
-            if student:
-                alert_system = AlertSystem(db)
-                alerts = alert_system.check_alerts(
-                    student.id,
-                    {
-                        'behavior_score': processed_data['behavior_score'].iloc[-1],
-                        'red_count': processed_data['red_count'].iloc[-1],
-                        'behavior_trend': processed_data['behavior_trend'].iloc[-1]
-                    }
-                )
-                if alerts:
-                    st.warning(f"Found {len(alerts)} new alert(s)! Check the sidebar for details.")
+                        # Add confidence interval for future predictions
+                        std_dev = processed_data['rolling_std_7d'].mean()
+                        plt.fill_between(
+                            future_data['date'],
+                            future_data['predicted'] - std_dev,
+                            future_data['predicted'] + std_dev,
+                            alpha=0.2,
+                            label='Forecast Uncertainty'
+                        )
 
-        except Exception as e:
-            st.error(f"Error processing data: {str(e)}")
-        finally:
-            db.close()
+                        plt.legend()
+                        plt.title("Behavior Score: Historical Data and 24-Hour Forecast")
+                        plt.xlabel("Date/Time")
+                        plt.ylabel("Behavior Score")
+                        plt.xticks(rotation=45)
+                        st.pyplot(fig)
+
+                        # Display future predictions table
+                        st.subheader("24-Hour Behavior Forecast")
+                        future_predictions = future_data.copy()
+                        future_predictions['hour'] = future_predictions['date'].dt.strftime('%I:00 %p')
+                        future_predictions['predicted_score'] = future_predictions['predicted'].round(2)
+                        st.dataframe(
+                            future_predictions[['hour', 'predicted_score']],
+                            hide_index=True
+                        )
+
+                        # Check for predicted alerts
+                        student = db.query(Student).filter(Student.name == student_name).first()
+                        if student:
+                            future_data = predictions[predictions['actual'].isna()]
+                            if not future_data.empty:
+                                alert_system.check_alerts(
+                                    student.id,
+                                    {
+                                        'behavior_score': future_data['predicted'].iloc[-1],
+                                        'red_count': processed_data['red_count'].mean(),
+                                        'behavior_trend': future_data['predicted'].diff().iloc[-1]
+                                    },
+                                    is_prediction=True
+                                )
+
+                # Check for alerts based on processed data
+                student = db.query(Student).filter(Student.name == student_name).first()
+                if student:
+                    alert_system = AlertSystem(db)
+                    alerts = alert_system.check_alerts(
+                        student.id,
+                        {
+                            'behavior_score': processed_data['behavior_score'].iloc[-1],
+                            'red_count': processed_data['red_count'].iloc[-1],
+                            'behavior_trend': processed_data['behavior_trend'].iloc[-1]
+                        }
+                    )
+                    if alerts:
+                        st.warning(f"Found {len(alerts)} new alert(s)! Check the sidebar for details.")
+
+            except Exception as e:
+                st.error(f"Error processing data: {str(e)}")
+            finally:
+                db.close()
+    with tab2:
+        manage_medications(student_name, db)
 
 if __name__ == "__main__":
     main()
