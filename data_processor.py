@@ -11,18 +11,27 @@ class DataProcessor:
     def __init__(self, data, db: Session = None):
         self.data = data
         self.db = db
-        self.time_slots = self.data.columns[2:35]  # Time slots from 7:30 AM to 3:45 PM
+        # Skip the first two metadata rows and use the third row as header
+        self.data = pd.read_csv(data, skiprows=2)
+        # Get only the time slot columns (from 7:30 AM to 3:45 PM)
+        self.time_slots = [col for col in self.data.columns if ':' in col and ('AM' in col or 'PM' in col)][:33]
 
     def clean_date(self, date_str):
         """Clean and standardize date format"""
         if pd.isna(date_str) or date_str == '':
             return None
-        # Remove extra slashes and clean the date string
-        clean_str = '/'.join(filter(None, date_str.split('/')))
         try:
-            return pd.to_datetime(clean_str)
+            # First try to parse with weekday name
+            parts = date_str.split(',')
+            if len(parts) > 1:
+                date_str = parts[1].strip()
+            return pd.to_datetime(date_str)
         except:
-            return None
+            try:
+                # Fallback to direct parsing
+                return pd.to_datetime(date_str)
+            except:
+                return None
 
     def get_environmental_factors(self, student_id: int, date: datetime) -> dict:
         """Get environmental factors for a specific date"""
@@ -112,11 +121,9 @@ class DataProcessor:
     def process_data(self, student_id: int = None):
         """Process and clean the behavioral data"""
         try:
-            df = self.data.copy()
-
             # Clean date column
-            df['date'] = df['Date'].apply(self.clean_date)
-            df = df.dropna(subset=['date'])  # Remove rows with invalid dates
+            self.data['date'] = self.data['Date'].apply(self.clean_date)
+            df = self.data.dropna(subset=['date'])  # Remove rows with invalid dates
 
             # Convert behavior markers to numerical values
             behavior_map = {
@@ -124,11 +131,12 @@ class DataProcessor:
                 'y': 1,  # Yellow - needs some support
                 'g': 2,  # Green - meeting expectations
                 'G': 2,  # Alternate Green format
+                'a': np.nan,  # Absent
                 '0': np.nan,
                 '': np.nan
             }
 
-            # Calculate behavior scores
+            # Calculate behavior scores for time slots
             behavior_scores = df[self.time_slots].replace(behavior_map)
 
             # Calculate daily metrics
@@ -153,10 +161,6 @@ class DataProcessor:
             df['behavior_trend'] = df['behavior_score'].diff().fillna(0)
             df['weekly_improvement'] = df['rolling_avg_7d'] - df['rolling_avg_7d'].shift(7)
 
-            # Get weekly statistics
-            weekly_stats = self.calculate_weekly_stats(df)
-            df = df.merge(weekly_stats, on='week', how='left')
-
             # Add environmental factors if database session is available
             if self.db and student_id:
                 env_features = df['date'].apply(
@@ -172,8 +176,7 @@ class DataProcessor:
                 'date', 'day_of_week', 'month', 'week', 'season',
                 'behavior_score', 'red_count', 'yellow_count', 'green_count',
                 'rolling_avg_7d', 'rolling_std_7d', 'behavior_trend',
-                'weekly_improvement', 'weekly_avg_score', 'weekly_score_std',
-                'is_monday', 'is_friday'
+                'weekly_improvement'
             ]].copy()
 
             # Add environmental columns if they exist
@@ -188,12 +191,13 @@ class DataProcessor:
             return processed_df
 
         except Exception as e:
-            raise Exception(f"Error processing data: {str(e)}")
+            print(f"Error processing data: {str(e)}")
+            raise
 
     def get_behavior_distribution(self):
         """Calculate behavior distribution"""
         behavior_counts = self.data[self.time_slots].values.flatten()
-        valid_counts = pd.Series(behavior_counts).value_counts().drop(['0', '', 'G'], errors='ignore')
+        valid_counts = pd.Series(behavior_counts).value_counts().drop(['0', '', 'a', 'G'], errors='ignore')
         return valid_counts.reindex(['g', 'y', 'r']).fillna(0)
 
     def get_summary_stats(self):
