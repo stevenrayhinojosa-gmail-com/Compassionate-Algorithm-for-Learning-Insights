@@ -1,10 +1,17 @@
 """Add alert tables
 
-Revision ID: add_alert_tables
+Revision ID: 002_alerts
+Revises: 001_initial
 Create Date: 2025-03-17
 """
 from alembic import op
 import sqlalchemy as sa
+
+# revision identifiers, used by Alembic.
+revision = '002_alerts'
+down_revision = '001_initial'
+branch_labels = None
+depends_on = None
 
 def upgrade():
     # Create alert_configurations table
@@ -19,6 +26,8 @@ def upgrade():
         sa.Column('trend_threshold', sa.Float(), nullable=True),
         sa.Column('is_active', sa.Boolean(), nullable=True),
         sa.Column('notify_on_prediction', sa.Boolean(), nullable=True),
+        sa.Column('notification_phone', sa.String(), nullable=True),
+        sa.Column('notification_enabled', sa.Boolean(), nullable=True),
         sa.ForeignKeyConstraint(['student_id'], ['students.id'], ),
         sa.PrimaryKeyConstraint('id')
     )
@@ -33,6 +42,7 @@ def upgrade():
         sa.Column('alert_type', sa.String(), nullable=True),
         sa.Column('value', sa.Float(), nullable=True),
         sa.Column('is_prediction', sa.Boolean(), nullable=True),
+        sa.Column('notification_sent', sa.Boolean(), nullable=True),
         sa.ForeignKeyConstraint(['configuration_id'], ['alert_configurations.id'], ),
         sa.PrimaryKeyConstraint('id')
     )

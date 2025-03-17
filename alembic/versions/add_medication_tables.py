@@ -1,10 +1,17 @@
 """Add medication tables
 
-Revision ID: add_medication_tables
+Revision ID: 003_medications
+Revises: 002_alerts
 Create Date: 2025-03-17
 """
 from alembic import op
 import sqlalchemy as sa
+
+# revision identifiers, used by Alembic.
+revision = '003_medications'
+down_revision = '002_alerts'
+branch_labels = None
+depends_on = None
 
 def upgrade():
     # Create medication_records table
