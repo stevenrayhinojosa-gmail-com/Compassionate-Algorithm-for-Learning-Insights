@@ -4,11 +4,14 @@ version = "0.1.0"
 description = "Add your description here"
 requires-python = ">=3.11"
 dependencies = [
+    "alembic>=1.15.1",
     "matplotlib>=3.10.1",
     "numpy>=2.2.4",
     "pandas>=2.2.3",
+    "psycopg2-binary>=2.9.10",
     "scikit-learn>=1.6.1",
     "seaborn>=0.13.2",
+    "sqlalchemy>=2.0.39",
     "streamlit>=1.43.2",
     "xgboost>=3.0.0",
 ]

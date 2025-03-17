@@ -5,8 +5,58 @@ from data_processor import DataProcessor
 from model_trainer import ModelTrainer
 import matplotlib.pyplot as plt
 import seaborn as sns
+from database import SessionLocal, engine
+from models import Base, Student, BehaviorRecord, TimeSlotBehavior
+from datetime import datetime
+
+# Create database tables
+Base.metadata.create_all(bind=engine)
 
 st.set_page_config(page_title="Student Behavior Forecasting", layout="wide")
+
+def get_db():
+    db = SessionLocal()
+    try:
+        return db
+    finally:
+        db.close()
+
+def store_behavior_data(processed_data, student_name="Default Student"):
+    """Store processed behavior data in the database"""
+    db = get_db()
+    try:
+        # Create or get student
+        student = db.query(Student).filter(Student.name == student_name).first()
+        if not student:
+            student = Student(name=student_name)
+            db.add(student)
+            db.commit()
+            db.refresh(student)
+
+        # Store behavior records
+        for _, row in processed_data.iterrows():
+            record = BehaviorRecord(
+                date=row['date'],
+                student_id=student.id,
+                behavior_score=row['behavior_score'],
+                red_count=row['red_count'],
+                yellow_count=row['yellow_count'],
+                green_count=row['green_count'],
+                rolling_avg_7d=row['rolling_avg_7d'],
+                rolling_std_7d=row['rolling_std_7d'],
+                behavior_trend=row['behavior_trend'],
+                weekly_improvement=row['weekly_improvement']
+            )
+            db.add(record)
+
+        db.commit()
+        return True
+    except Exception as e:
+        db.rollback()
+        st.error(f"Error storing data: {str(e)}")
+        return False
+    finally:
+        db.close()
 
 def plot_weekly_patterns(data):
     """Plot weekly behavior patterns"""
@@ -48,6 +98,9 @@ def main():
     - Behavioral forecasting using machine learning
     """)
 
+    # Add student name input
+    student_name = st.text_input("Student Name", "Default Student")
+
     uploaded_file = st.file_uploader("Upload behavior data CSV", type=['csv'])
 
     if uploaded_file is not None:
@@ -57,6 +110,13 @@ def main():
             processor = DataProcessor(data)
             processed_data = processor.process_data()
             summary_stats = processor.get_summary_stats()
+
+            # Store data in database
+            if st.button("Save Data to Database"):
+                if store_behavior_data(processed_data, student_name):
+                    st.success("Data successfully saved to database!")
+                else:
+                    st.error("Failed to save data to database.")
 
             # Display summary statistics
             st.header("Summary Statistics")
