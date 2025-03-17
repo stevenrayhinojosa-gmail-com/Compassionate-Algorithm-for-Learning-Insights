@@ -526,25 +526,85 @@ def manage_environmental_factors(student_name, db):
                 st.write(f"Notes: {log.notes}")
             st.divider()
 
+def display_next_day_predictions(metrics, predictions_df):
+    """Display next day predictions in a user-friendly format"""
+    next_day = predictions_df['time'].dt.date.iloc[0]
+
+    st.header(f"🔮 Behavior Predictions for {next_day.strftime('%A, %B %d')}")
+
+    # Display overall metrics
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        avg_score = predictions_df['predicted_score'].mean()
+        score_color = 'green' if avg_score > 1.4 else 'red' if avg_score < 0.6 else 'orange'
+        st.metric(
+            "Average Expected Score",
+            f"{avg_score:.2f}",
+            delta=f"{predictions_df['predicted_score'].iloc[-1] - avg_score:.2f}"
+        )
+
+    with col2:
+        behavior_counts = predictions_df['predicted_category'].value_counts()
+        st.metric(
+            "Green Periods Expected",
+            f"{behavior_counts.get('Green', 0)} of {len(predictions_df)}"
+        )
+
+    with col3:
+        risk_level = predictions_df['risk_level'].mode().iloc[0]
+        st.metric("Overall Risk Level", risk_level)
+
+    # Display timeline of predictions
+    st.subheader("📅 Detailed Timeline")
+
+    # Create time blocks with predictions
+    for _, row in predictions_df.iterrows():
+        time_str = row['time'].strftime('%I:%M %p')
+        score = row['predicted_score']
+        category = row['predicted_category']
+        risk = row['risk_level']
+
+        # Color coding based on prediction
+        colors = {
+            'Green': 'rgba(0, 255, 0, 0.2)',
+            'Yellow': 'rgba(255, 255, 0, 0.2)',
+            'Red': 'rgba(255, 0, 0, 0.2)'
+        }
+
+        with st.container(border=True):
+            col1, col2, col3 = st.columns([1, 2, 1])
+            with col1:
+                st.write(f"**{time_str}**")
+            with col2:
+                st.markdown(
+                    f"""
+                    <div style="background-color: {colors[category]}; padding: 10px; border-radius: 5px;">
+                        Score: {score:.2f} ({category})
+                    </div>
+                    """,
+                    unsafe_allow_html=True
+                )
+            with col3:
+                st.write(f"Risk: {risk}")
+
+    # Add model performance disclaimer
+    st.info(
+        f"""
+        Model Performance Metrics:
+        - Accuracy (R² Score): {metrics['r2']:.2f}
+        - Mean Absolute Error: {metrics['mae']:.2f}
+        - Prediction Confidence: {(1 - metrics['mae']):.1%}
+        """
+    )
+
 def main():
     st.title("Student Behavior Analysis and Forecasting")
 
-    st.write("""
-    This application analyzes student behavior patterns and predicts future trends.
-    Upload your behavior data CSV file to begin the analysis.
-
-    The analysis includes:
-    - Daily behavior scores and patterns
-    - Weekly trends and improvements
-    - Behavioral forecasting using machine learning
-    - Alert system for at-risk behavior patterns
-    """)
+    # Get database session
+    db = get_db()
 
     # Add student name input
     student_name = st.text_input("Student Name", "Default Student")
-
-    # Get database session
-    db = get_db()
 
     # Display alert configuration in sidebar
     with st.sidebar:
@@ -556,19 +616,35 @@ def main():
 
     uploaded_file = st.file_uploader("Upload behavior data CSV", type=['csv'])
 
-    # Add Medication Management and Environmental Factors tabs
-    tab1, tab2, tab3 = st.tabs(["Behavior Analysis", "Medication Management", "Environmental Factors"])
+    if uploaded_file is not None:
+        try:
+            # Load and process data
+            data = pd.read_csv(uploaded_file)
+            processor = DataProcessor(data, db)
+            processed_data = processor.process_data(
+                student_id=db.query(Student).filter(Student.name == student_name).first().id
+                if db.query(Student).filter(Student.name == student_name).first()
+                else None
+            )
 
-    with tab1:
-        if uploaded_file is not None:
-            try:
-                # Load and process data
-                data = pd.read_csv(uploaded_file)
-                processor = DataProcessor(data)
-                processed_data = processor.process_data()
-                summary_stats = processor.get_summary_stats()
+            # Train model and generate next day predictions
+            trainer = ModelTrainer(processed_data)
+            metrics, next_day_predictions = trainer.train_and_predict_next_day()
 
-                # Store data in database
+            # Display next day predictions at the top
+            display_next_day_predictions(metrics, next_day_predictions)
+
+            # Add a divider before the rest of the content
+            st.divider()
+
+            # Create tabs for different sections
+            tab1, tab2, tab3 = st.tabs([
+                "Behavior Analysis",
+                "Medication Management",
+                "Environmental Factors"
+            ])
+
+            with tab1:
                 if st.button("Save Data to Database"):
                     if store_behavior_data(processed_data, student_name):
                         st.success("Data successfully saved to database!")
@@ -711,14 +787,12 @@ def main():
                     if alerts:
                         st.warning(f"Found {len(alerts)} new alert(s)! Check the sidebar for details.")
 
-            except Exception as e:
-                st.error(f"Error processing data: {str(e)}")
-            finally:
-                db.close()
-    with tab2:
-        manage_medications(student_name, db)
-    with tab3:
-        manage_environmental_factors(student_name, db)
+        except Exception as e:
+            st.error(f"Error processing data: {str(e)}")
+        finally:
+            db.close()
+    else:
+        st.info("Please upload behavior data CSV file to view predictions and analysis.")
 
 if __name__ == "__main__":
     main()

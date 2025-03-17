@@ -77,27 +77,32 @@ class ModelTrainer:
 
         return X_transformed, y
 
-    def generate_future_features(self, last_date, periods=24):
-        """Generate feature matrix for future predictions"""
-        future_dates = pd.date_range(
-            start=last_date + timedelta(hours=1),
-            periods=periods,
-            freq='H'
+    def generate_next_day_features(self, last_date):
+        """Generate feature matrix for next school day predictions"""
+        next_day = last_date + timedelta(days=1)
+        while next_day.weekday() > 4:  # Skip weekends
+            next_day += timedelta(days=1)
+
+        # Create time slots for school day (7:30 AM to 3:45 PM)
+        time_slots = pd.date_range(
+            start=datetime.combine(next_day, datetime.strptime("7:30", "%H:%M").time()),
+            end=datetime.combine(next_day, datetime.strptime("15:45", "%H:%M").time()),
+            freq="15min"
         )
 
-        # Create base features
+        # Create base features for each time slot
         future_features = pd.DataFrame({
-            'day_of_week': future_dates.dayofweek,
-            'month': future_dates.month,
-            'week': future_dates.isocalendar().week,
-            'is_monday': (future_dates.dayofweek == 0).astype(int),
-            'is_friday': (future_dates.dayofweek == 4).astype(int),
-            'season': [self._get_season(d) for d in future_dates],
-            'rolling_avg_7d': [self.data['rolling_avg_7d'].iloc[-1]] * periods,
-            'rolling_std_7d': [self.data['rolling_std_7d'].iloc[-1]] * periods,
-            'behavior_trend': [self.data['behavior_trend'].iloc[-1]] * periods,
-            'weekly_improvement': [self.data['weekly_improvement'].iloc[-1]] * periods
-        })
+            'day_of_week': next_day.weekday(),
+            'month': next_day.month,
+            'week': next_day.isocalendar()[1],
+            'is_monday': int(next_day.weekday() == 0),
+            'is_friday': int(next_day.weekday() == 4),
+            'season': self._get_season(next_day),
+            'rolling_avg_7d': self.data['rolling_avg_7d'].iloc[-1],
+            'rolling_std_7d': self.data['rolling_std_7d'].iloc[-1],
+            'behavior_trend': self.data['behavior_trend'].iloc[-1],
+            'weekly_improvement': self.data['weekly_improvement'].iloc[-1]
+        }, index=range(len(time_slots)))
 
         # Add environmental features if they exist in training data
         for feature in self.environmental_features:
@@ -107,7 +112,7 @@ class ModelTrainer:
         # Transform features
         future_features_transformed = self.preprocessor.transform(future_features)
 
-        return future_features_transformed, future_dates
+        return future_features_transformed, time_slots
 
     def _get_season(self, date):
         """Determine season based on date"""
@@ -121,8 +126,8 @@ class ModelTrainer:
         else:
             return 'Fall'
 
-    def train_and_predict(self):
-        """Train XGBoost model and generate predictions"""
+    def train_and_predict_next_day(self):
+        """Train XGBoost model and generate next day predictions"""
         X, y = self.prepare_features()
 
         # Split data
@@ -149,27 +154,33 @@ class ModelTrainer:
             'r2': r2_score(y_test, y_pred)
         }
 
-        # Generate future predictions
-        future_features, future_dates = self.generate_future_features(
+        # Generate next day predictions
+        future_features, time_slots = self.generate_next_day_features(
             self.data['date'].iloc[-1]
         )
-        future_predictions = self.model.predict(future_features)
+        next_day_predictions = self.model.predict(future_features)
 
         # Prepare prediction results
-        historical_predictions = pd.DataFrame({
-            'date': self.data['date'].iloc[-len(y_test):],
-            'actual': y_test,
-            'predicted': y_pred
+        next_day_df = pd.DataFrame({
+            'time': time_slots,
+            'predicted_score': next_day_predictions,
+            'confidence': [
+                1 - (metrics['mae'] / (self.data['behavior_score'].max() - self.data['behavior_score'].min()))
+            ] * len(next_day_predictions)
         })
 
-        future_predictions_df = pd.DataFrame({
-            'date': future_dates,
-            'predicted': future_predictions
-        })
+        # Add behavior category predictions
+        next_day_df['predicted_category'] = pd.cut(
+            next_day_df['predicted_score'],
+            bins=[-float('inf'), 0.6, 1.4, float('inf')],
+            labels=['Red', 'Yellow', 'Green']
+        )
 
-        predictions = pd.concat([
-            historical_predictions,
-            future_predictions_df
-        ]).reset_index(drop=True)
+        # Add risk levels
+        next_day_df['risk_level'] = pd.cut(
+            next_day_df['predicted_score'],
+            bins=[-float('inf'), 0.4, 0.8, 1.2, 1.6, float('inf')],
+            labels=['Very High', 'High', 'Moderate', 'Low', 'Very Low']
+        )
 
-        return metrics, predictions
+        return metrics, next_day_df
