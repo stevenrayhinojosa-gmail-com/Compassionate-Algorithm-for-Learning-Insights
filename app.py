@@ -6,8 +6,9 @@ from model_trainer import ModelTrainer
 import matplotlib.pyplot as plt
 import seaborn as sns
 from database import SessionLocal, engine
-from models import Base, Student, BehaviorRecord, TimeSlotBehavior
+from models import Base, Student, BehaviorRecord, TimeSlotBehavior, AlertConfiguration
 from datetime import datetime
+from alert_system import AlertSystem
 
 # Create database tables
 Base.metadata.create_all(bind=engine)
@@ -85,6 +86,79 @@ def plot_behavior_trends(data):
     plt.xticks(rotation=45)
     return fig
 
+def configure_alerts(student_name, db):
+    """Configure alert settings for a student"""
+    st.header("Alert Configuration")
+
+    # Get or create student
+    student = db.query(Student).filter(Student.name == student_name).first()
+    if not student:
+        st.warning("Please save some behavior data first to configure alerts.")
+        return
+
+    alert_system = AlertSystem(db)
+
+    # Display existing alert configurations
+    existing_configs = db.query(AlertConfiguration).filter(
+        AlertConfiguration.student_id == student.id
+    ).all()
+
+    if existing_configs:
+        st.subheader("Existing Alert Configurations")
+        for config in existing_configs:
+            with st.expander(f"Alert: {config.name}"):
+                st.write(f"Description: {config.description}")
+                st.write(f"Behavior Score Threshold: {config.behavior_threshold}")
+                st.write(f"Consecutive Red Threshold: {config.red_threshold}")
+                st.write(f"Trend Threshold: {config.trend_threshold}")
+                st.write(f"Active: {config.is_active}")
+                st.write(f"Alert on Predictions: {config.notify_on_prediction}")
+
+    # Form for creating new alert configuration
+    st.subheader("Create New Alert Configuration")
+    with st.form("alert_config_form"):
+        name = st.text_input("Alert Name", "Behavior Alert")
+        description = st.text_area("Description", "Alert for concerning behavior patterns")
+        behavior_threshold = st.slider("Behavior Score Threshold", 0.0, 2.0, 1.0)
+        red_threshold = st.slider("Consecutive Red Count Threshold", 1, 10, 3)
+        trend_threshold = st.slider("Behavior Trend Threshold", -2.0, 0.0, -0.5)
+        notify_on_prediction = st.checkbox("Alert on Predicted Behaviors", True)
+
+        if st.form_submit_button("Create Alert Configuration"):
+            config_data = {
+                'name': name,
+                'description': description,
+                'behavior_threshold': behavior_threshold,
+                'red_threshold': red_threshold,
+                'trend_threshold': trend_threshold,
+                'notify_on_prediction': notify_on_prediction
+            }
+            alert_system.create_alert_config(student.id, config_data)
+            st.success("Alert configuration created successfully!")
+            st.rerun()
+
+def display_alerts(student_name, db):
+    """Display active alerts for a student"""
+    student = db.query(Student).filter(Student.name == student_name).first()
+    if not student:
+        return
+
+    alert_system = AlertSystem(db)
+    active_alerts = alert_system.get_active_alerts(student.id)
+
+    if active_alerts:
+        st.sidebar.header("⚠️ Active Alerts")
+        for alert in active_alerts:
+            alert_color = "red" if not alert.is_prediction else "orange"
+            with st.sidebar.container(border=True):
+                st.markdown(f"<p style='color: {alert_color};'>", unsafe_allow_html=True)
+                st.write(f"Alert Type: {alert.alert_type}")
+                st.write(f"Value: {alert.value:.2f}")
+                st.write(f"Triggered: {alert.triggered_at}")
+                if alert.is_prediction:
+                    st.write("(Predicted)")
+                st.markdown("</p>", unsafe_allow_html=True)
+
 def main():
     st.title("Student Behavior Analysis and Forecasting")
 
@@ -96,10 +170,22 @@ def main():
     - Daily behavior scores and patterns
     - Weekly trends and improvements
     - Behavioral forecasting using machine learning
+    - Alert system for at-risk behavior patterns
     """)
 
     # Add student name input
     student_name = st.text_input("Student Name", "Default Student")
+
+    # Get database session
+    db = get_db()
+
+    # Display alert configuration in sidebar
+    with st.sidebar:
+        if st.button("Configure Alerts"):
+            configure_alerts(student_name, db)
+
+    # Display active alerts
+    display_alerts(student_name, db)
 
     uploaded_file = st.file_uploader("Upload behavior data CSV", type=['csv'])
 
@@ -224,8 +310,40 @@ def main():
                         hide_index=True
                     )
 
+                    # Check for predicted alerts
+                    student = db.query(Student).filter(Student.name == student_name).first()
+                    if student:
+                        future_data = predictions[predictions['actual'].isna()]
+                        if not future_data.empty:
+                            alert_system.check_alerts(
+                                student.id,
+                                {
+                                    'behavior_score': future_data['predicted'].iloc[-1],
+                                    'red_count': processed_data['red_count'].mean(),
+                                    'behavior_trend': future_data['predicted'].diff().iloc[-1]
+                                },
+                                is_prediction=True
+                            )
+
+            # Check for alerts based on processed data
+            student = db.query(Student).filter(Student.name == student_name).first()
+            if student:
+                alert_system = AlertSystem(db)
+                alerts = alert_system.check_alerts(
+                    student.id,
+                    {
+                        'behavior_score': processed_data['behavior_score'].iloc[-1],
+                        'red_count': processed_data['red_count'].iloc[-1],
+                        'behavior_trend': processed_data['behavior_trend'].iloc[-1]
+                    }
+                )
+                if alerts:
+                    st.warning(f"Found {len(alerts)} new alert(s)! Check the sidebar for details.")
+
         except Exception as e:
             st.error(f"Error processing data: {str(e)}")
+        finally:
+            db.close()
 
 if __name__ == "__main__":
     main()
