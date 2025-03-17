@@ -184,14 +184,45 @@ def main():
                     # Plot predictions
                     st.subheader("Prediction Results")
                     fig, ax = plt.subplots(figsize=(12, 6))
-                    plt.plot(predictions.index, predictions['actual'], 
+
+                    # Plot historical data
+                    historical_data = predictions[predictions['actual'].notna()]
+                    plt.plot(historical_data['date'], historical_data['actual'], 
                             label='Actual', alpha=0.7)
-                    plt.plot(predictions.index, predictions['predicted'], 
-                            label='Predicted', alpha=0.7)
+                    plt.plot(historical_data['date'], historical_data['predicted'], 
+                            label='Historical Predictions', alpha=0.7)
+
+                    # Plot future predictions
+                    future_data = predictions[predictions['actual'].isna()]
+                    plt.plot(future_data['date'], future_data['predicted'], 
+                            label='24-Hour Forecast', linestyle='--', alpha=0.7)
+
+                    # Add confidence interval for future predictions
+                    std_dev = processed_data['rolling_std_7d'].mean()
+                    plt.fill_between(
+                        future_data['date'],
+                        future_data['predicted'] - std_dev,
+                        future_data['predicted'] + std_dev,
+                        alpha=0.2,
+                        label='Forecast Uncertainty'
+                    )
+
                     plt.legend()
-                    plt.title("Actual vs Predicted Behavior Scores")
+                    plt.title("Behavior Score: Historical Data and 24-Hour Forecast")
+                    plt.xlabel("Date/Time")
+                    plt.ylabel("Behavior Score")
                     plt.xticks(rotation=45)
                     st.pyplot(fig)
+
+                    # Display future predictions table
+                    st.subheader("24-Hour Behavior Forecast")
+                    future_predictions = future_data.copy()
+                    future_predictions['hour'] = future_predictions['date'].dt.strftime('%I:00 %p')
+                    future_predictions['predicted_score'] = future_predictions['predicted'].round(2)
+                    st.dataframe(
+                        future_predictions[['hour', 'predicted_score']],
+                        hide_index=True
+                    )
 
         except Exception as e:
             st.error(f"Error processing data: {str(e)}")
