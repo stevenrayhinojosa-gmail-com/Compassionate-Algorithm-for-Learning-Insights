@@ -103,3 +103,93 @@ class MedicationLog(Base):
 
     # Relationship
     medication = relationship("MedicationRecord", back_populates="logs")
+
+
+class EnvironmentalFactor(Base):
+    __tablename__ = "environmental_factors"
+
+    id = Column(Integer, primary_key=True, index=True)
+    student_id = Column(Integer, ForeignKey("students.id"))
+    date = Column(Date, index=True)
+    factor_type = Column(String)  # weather, staff, routine, etc.
+    description = Column(Text)
+    impact_level = Column(Integer)  # Scale of 1-5
+    notes = Column(Text, nullable=True)
+
+    # Relationship
+    student = relationship("Student", backref="environmental_factors")
+
+class SeasonalPattern(Base):
+    __tablename__ = "seasonal_patterns"
+
+    id = Column(Integer, primary_key=True, index=True)
+    student_id = Column(Integer, ForeignKey("students.id"))
+    season = Column(String)  # Spring, Summer, Fall, Winter
+    year = Column(Integer)
+    avg_behavior_score = Column(Float)
+    seasonal_impact = Column(Text)
+    notes = Column(Text, nullable=True)
+
+    # Relationship
+    student = relationship("Student", backref="seasonal_patterns")
+
+class StaffChange(Base):
+    __tablename__ = "staff_changes"
+
+    id = Column(Integer, primary_key=True, index=True)
+    student_id = Column(Integer, ForeignKey("students.id"))
+    change_date = Column(Date, index=True)
+    staff_role = Column(String)  # teacher, aide, therapist, etc.
+    change_type = Column(String)  # new, substitute, departure
+    adjustment_period = Column(Integer)  # days
+    impact_observed = Column(Text)
+
+    # Relationship
+    student = relationship("Student", backref="staff_changes")
+
+class LearningEnvironment(Base):
+    __tablename__ = "learning_environments"
+
+    id = Column(Integer, primary_key=True, index=True)
+    student_id = Column(Integer, ForeignKey("students.id"))
+    start_date = Column(Date, index=True)
+    end_date = Column(Date, nullable=True)
+    classroom_type = Column(String)
+    seating_position = Column(String)
+    noise_level = Column(String)  # low, moderate, high
+    lighting_type = Column(String)
+    temperature = Column(Float)
+    notes = Column(Text, nullable=True)
+
+    # Relationship
+    student = relationship("Student", backref="learning_environments")
+
+class NutritionLog(Base):
+    __tablename__ = "nutrition_logs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    student_id = Column(Integer, ForeignKey("students.id"))
+    date = Column(Date, index=True)
+    meal_type = Column(String)  # breakfast, lunch, snack
+    food_items = Column(Text)
+    sugar_intake_level = Column(String)  # low, moderate, high
+    protein_intake_level = Column(String)
+    notes = Column(Text, nullable=True)
+
+    # Relationship
+    student = relationship("Student", backref="nutrition_logs")
+
+class RoutineChange(Base):
+    __tablename__ = "routine_changes"
+
+    id = Column(Integer, primary_key=True, index=True)
+    student_id = Column(Integer, ForeignKey("students.id"))
+    change_date = Column(Date, index=True)
+    change_type = Column(String)  # schedule, activity, transportation
+    description = Column(Text)
+    duration = Column(Integer)  # days
+    adaptation_level = Column(Integer)  # Scale 1-5
+    notes = Column(Text, nullable=True)
+
+    # Relationship
+    student = relationship("Student", backref="routine_changes")

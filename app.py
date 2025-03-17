@@ -8,7 +8,7 @@ import seaborn as sns
 from database import SessionLocal, engine
 from models import (
     Base, Student, BehaviorRecord, TimeSlotBehavior, AlertConfiguration,
-    MedicationRecord, MedicationLog
+    MedicationRecord, MedicationLog, LearningEnvironment, StaffChange, RoutineChange, NutritionLog, SeasonalPattern
 )
 from datetime import datetime, date
 from alert_system import AlertSystem
@@ -297,6 +297,235 @@ def manage_medications(student_name, db):
                             st.write(f"Notes: {log.notes}")
 
 
+def manage_environmental_factors(student_name, db):
+    """Manage environmental and contextual factors"""
+    st.header("Environmental Factors Management")
+
+    # Get or create student
+    student = db.query(Student).filter(Student.name == student_name).first()
+    if not student:
+        st.warning("Please save some behavior data first to manage environmental factors.")
+        return
+
+    # Create tabs for different types of factors
+    env_tab1, env_tab2, env_tab3, env_tab4 = st.tabs([
+        "Learning Environment",
+        "Staff & Routine Changes",
+        "Nutrition & Health",
+        "Seasonal Patterns"
+    ])
+
+    with env_tab1:
+        st.subheader("Learning Environment Setup")
+
+        # Form to add/update learning environment
+        with st.form("learning_environment_form"):
+            classroom_type = st.selectbox(
+                "Classroom Type",
+                ["Regular", "Special Education", "Resource Room", "Integrated", "Other"]
+            )
+            seating_position = st.selectbox(
+                "Seating Position",
+                ["Front", "Middle", "Back", "Near Window", "Near Door", "Other"]
+            )
+            noise_level = st.select_slider(
+                "Noise Level",
+                options=["Very Low", "Low", "Moderate", "High", "Very High"]
+            )
+            lighting_type = st.selectbox(
+                "Lighting Type",
+                ["Natural", "Fluorescent", "LED", "Mixed", "Other"]
+            )
+            temperature = st.slider("Temperature (°F)", 65, 85, 72)
+            start_date = st.date_input("Start Date")
+            notes = st.text_area("Additional Notes")
+
+            if st.form_submit_button("Save Learning Environment"):
+                new_env = LearningEnvironment(
+                    student_id=student.id,
+                    classroom_type=classroom_type,
+                    seating_position=seating_position,
+                    noise_level=noise_level,
+                    lighting_type=lighting_type,
+                    temperature=temperature,
+                    start_date=start_date,
+                    notes=notes
+                )
+                db.add(new_env)
+                db.commit()
+                st.success("Learning environment settings saved!")
+
+    with env_tab2:
+        st.subheader("Staff Changes")
+        with st.form("staff_change_form"):
+            staff_role = st.selectbox(
+                "Staff Role",
+                ["Teacher", "Aide", "Therapist", "Specialist", "Other"]
+            )
+            change_type = st.selectbox(
+                "Change Type",
+                ["New Staff", "Substitute", "Departure", "Return"]
+            )
+            change_date = st.date_input("Change Date")
+            adjustment_period = st.number_input(
+                "Expected Adjustment Period (days)",
+                min_value=1,
+                value=14
+            )
+            impact_observed = st.text_area("Observed Impact")
+
+            if st.form_submit_button("Record Staff Change"):
+                staff_change = StaffChange(
+                    student_id=student.id,
+                    staff_role=staff_role,
+                    change_type=change_type,
+                    change_date=change_date,
+                    adjustment_period=adjustment_period,
+                    impact_observed=impact_observed
+                )
+                db.add(staff_change)
+                db.commit()
+                st.success("Staff change recorded!")
+
+        st.subheader("Routine Changes")
+        with st.form("routine_change_form"):
+            routine_type = st.selectbox(
+                "Change Type",
+                ["Schedule", "Activity", "Transportation", "Therapy", "Other"]
+            )
+            description = st.text_area("Change Description")
+            duration = st.number_input(
+                "Expected Duration (days)",
+                min_value=1,
+                value=7
+            )
+            adaptation_level = st.slider(
+                "Adaptation Level (1-5)",
+                1, 5, 3,
+                help="1=Significant difficulty, 5=Well adapted"
+            )
+            routine_date = st.date_input("Change Start Date")
+            routine_notes = st.text_area("Additional Notes")
+
+            if st.form_submit_button("Record Routine Change"):
+                routine_change = RoutineChange(
+                    student_id=student.id,
+                    change_type=routine_type,
+                    description=description,
+                    duration=duration,
+                    adaptation_level=adaptation_level,
+                    change_date=routine_date,
+                    notes=routine_notes
+                )
+                db.add(routine_change)
+                db.commit()
+                st.success("Routine change recorded!")
+
+    with env_tab3:
+        st.subheader("Nutrition Log")
+        with st.form("nutrition_log_form"):
+            meal_type = st.selectbox(
+                "Meal Type",
+                ["Breakfast", "Morning Snack", "Lunch", "Afternoon Snack"]
+            )
+            food_items = st.text_area("Food Items Consumed")
+            sugar_level = st.select_slider(
+                "Sugar Intake Level",
+                options=["Low", "Moderate", "High"]
+            )
+            protein_level = st.select_slider(
+                "Protein Intake Level",
+                options=["Low", "Moderate", "High"]
+            )
+            meal_date = st.date_input("Meal Date")
+            meal_notes = st.text_area("Additional Notes")
+
+            if st.form_submit_button("Add Nutrition Entry"):
+                nutrition_log = NutritionLog(
+                    student_id=student.id,
+                    meal_type=meal_type,
+                    food_items=food_items,
+                    sugar_intake_level=sugar_level,
+                    protein_intake_level=protein_level,
+                    date=meal_date,
+                    notes=meal_notes
+                )
+                db.add(nutrition_log)
+                db.commit()
+                st.success("Nutrition entry added!")
+
+    with env_tab4:
+        st.subheader("Seasonal Patterns")
+        with st.form("seasonal_pattern_form"):
+            season = st.selectbox(
+                "Season",
+                ["Spring", "Summer", "Fall", "Winter"]
+            )
+            year = st.number_input("Year", value=datetime.now().year, min_value=2020, max_value=2030)
+            avg_score = st.number_input("Average Behavior Score", min_value=0.0, max_value=2.0, value=1.0)
+            impact = st.text_area("Seasonal Impact Description")
+            seasonal_notes = st.text_area("Additional Notes")
+
+            if st.form_submit_button("Add Seasonal Pattern"):
+                seasonal_pattern = SeasonalPattern(
+                    student_id=student.id,
+                    season=season,
+                    year=year,
+                    avg_behavior_score=avg_score,
+                    seasonal_impact=impact,
+                    notes=seasonal_notes
+                )
+                db.add(seasonal_pattern)
+                db.commit()
+                st.success("Seasonal pattern recorded!")
+
+    # Display historical data
+    st.header("Environmental Factors History")
+
+    # Staff Changes History
+    with st.expander("📋 Staff Changes History"):
+        staff_changes = db.query(StaffChange).filter(
+            StaffChange.student_id == student.id
+        ).order_by(StaffChange.change_date.desc()).all()
+
+        for change in staff_changes:
+            st.write(f"**{change.staff_role}** - {change.change_type}")
+            st.write(f"Date: {change.change_date}")
+            st.write(f"Adjustment Period: {change.adjustment_period} days")
+            if change.impact_observed:
+                st.write(f"Impact: {change.impact_observed}")
+            st.divider()
+
+    # Routine Changes History
+    with st.expander("📋 Routine Changes History"):
+        routine_changes = db.query(RoutineChange).filter(
+            RoutineChange.student_id == student.id
+        ).order_by(RoutineChange.change_date.desc()).all()
+
+        for change in routine_changes:
+            st.write(f"**{change.change_type}** Change")
+            st.write(f"Date: {change.change_date}")
+            st.write(f"Duration: {change.duration} days")
+            st.write(f"Adaptation Level: {change.adaptation_level}/5")
+            if change.description:
+                st.write(f"Description: {change.description}")
+            st.divider()
+
+    # Nutrition History
+    with st.expander("📋 Nutrition History"):
+        nutrition_logs = db.query(NutritionLog).filter(
+            NutritionLog.student_id == student.id
+        ).order_by(NutritionLog.date.desc()).all()
+
+        for log in nutrition_logs:
+            st.write(f"**{log.meal_type}** - {log.date}")
+            st.write(f"Food Items: {log.food_items}")
+            st.write(f"Sugar Level: {log.sugar_intake_level}")
+            st.write(f"Protein Level: {log.protein_intake_level}")
+            if log.notes:
+                st.write(f"Notes: {log.notes}")
+            st.divider()
+
 def main():
     st.title("Student Behavior Analysis and Forecasting")
 
@@ -327,8 +556,8 @@ def main():
 
     uploaded_file = st.file_uploader("Upload behavior data CSV", type=['csv'])
 
-    # Add Medication Management tab
-    tab1, tab2 = st.tabs(["Behavior Analysis", "Medication Management"])
+    # Add Medication Management and Environmental Factors tabs
+    tab1, tab2, tab3 = st.tabs(["Behavior Analysis", "Medication Management", "Environmental Factors"])
 
     with tab1:
         if uploaded_file is not None:
@@ -488,6 +717,8 @@ def main():
                 db.close()
     with tab2:
         manage_medications(student_name, db)
+    with tab3:
+        manage_environmental_factors(student_name, db)
 
 if __name__ == "__main__":
     main()
