@@ -8,30 +8,128 @@ from models import (
 )
 
 class DataProcessor:
-    def __init__(self, data, db: Session = None):
-        self.data = data
+    def __init__(self, file_path, db: Session = None):
+        """Initialize with file path and database session"""
         self.db = db
         # Skip the first two metadata rows and use the third row as header
-        self.data = pd.read_csv(data, skiprows=2)
+        self.data = pd.read_csv(file_path, skiprows=2)
         # Get only the time slot columns (from 7:30 AM to 3:45 PM)
         self.time_slots = [col for col in self.data.columns if ':' in col and ('AM' in col or 'PM' in col)][:33]
+        print(f"Found {len(self.time_slots)} time slots")  # Debug log
 
     def clean_date(self, date_str):
         """Clean and standardize date format"""
         if pd.isna(date_str) or date_str == '':
             return None
         try:
-            # First try to parse with weekday name
-            parts = date_str.split(',')
-            if len(parts) > 1:
-                date_str = parts[1].strip()
-            return pd.to_datetime(date_str)
-        except:
-            try:
-                # Fallback to direct parsing
-                return pd.to_datetime(date_str)
-            except:
-                return None
+            # Remove weekday name if present
+            if ',' in date_str:
+                date_str = date_str.split(',')[1].strip()
+            # Convert to datetime using flexible parser
+            return pd.to_datetime(date_str, format='%m/%d/%Y')
+        except Exception as e:
+            print(f"Error parsing date '{date_str}': {str(e)}")  # Debug log
+            return None
+
+    def process_data(self, student_id: int = None):
+        """Process and clean the behavioral data"""
+        try:
+            print("Starting data processing...")  # Debug log
+
+            # Clean date column first
+            self.data['date'] = pd.to_datetime(
+                self.data['Date'].apply(lambda x: x.split(',')[1].strip() if ',' in str(x) else x),
+                format='%m/%d/%Y'
+            )
+
+            # Print the first few dates and dtype for verification
+            print("Date column head:", self.data['date'].head())
+            print("Date column dtype:", self.data['date'].dtype)
+
+            # Remove rows with invalid dates
+            df = self.data.dropna(subset=['date'])
+            print(f"Rows after date cleaning: {len(df)}")  # Debug log
+
+            # Convert behavior markers to numerical values
+            behavior_map = {
+                'r': 0,  # Red - needs significant support
+                'y': 1,  # Yellow - needs some support
+                'g': 2,  # Green - meeting expectations
+                'G': 2,  # Alternate Green format
+                'a': np.nan,  # Absent
+                '0': np.nan,
+                '': np.nan
+            }
+
+            # Calculate behavior scores for time slots
+            behavior_scores = df[self.time_slots].replace(behavior_map)
+            print("Behavior scores calculated")  # Debug log
+
+            # Calculate daily metrics
+            df['behavior_score'] = behavior_scores.mean(axis=1)
+            df['red_count'] = behavior_scores.apply(lambda x: (x == 0).sum(), axis=1)
+            df['yellow_count'] = behavior_scores.apply(lambda x: (x == 1).sum(), axis=1)
+            df['green_count'] = behavior_scores.apply(lambda x: (x == 2).sum(), axis=1)
+
+            # Extract temporal features
+            df['day_of_week'] = df['date'].dt.dayofweek
+            df['month'] = df['date'].dt.month
+            df['week'] = df['date'].dt.isocalendar().week
+            df['season'] = df['date'].apply(lambda x: self._get_season(x))
+
+            # Calculate rolling statistics
+            df['rolling_avg_7d'] = df['behavior_score'].rolling(window=7, min_periods=1).mean()
+            df['rolling_std_7d'] = df['behavior_score'].rolling(window=7, min_periods=1).std()
+
+            # Calculate behavioral trends
+            df['behavior_trend'] = df['behavior_score'].diff().fillna(0)
+            df['weekly_improvement'] = df['rolling_avg_7d'] - df['rolling_avg_7d'].shift(7)
+
+            # Add environmental factors if database session is available
+            if self.db and student_id:
+                env_features = df['date'].apply(
+                    lambda x: self.get_environmental_factors(student_id, x)
+                ).tolist()
+
+                env_df = pd.DataFrame(env_features)
+                if not env_df.empty:
+                    df = pd.concat([df, env_df], axis=1)
+
+            # Select features for the final dataset
+            processed_df = df[[
+                'date', 'day_of_week', 'month', 'week', 'season',
+                'behavior_score', 'red_count', 'yellow_count', 'green_count',
+                'rolling_avg_7d', 'rolling_std_7d', 'behavior_trend',
+                'weekly_improvement'
+            ]].copy()
+
+            # Add environmental columns if they exist
+            env_columns = ['environmental_impact', 'seasonal_score', 'active_staff_changes',
+                         'noise_level', 'temperature', 'high_sugar_meals',
+                         'high_protein_meals', 'active_routine_changes', 'routine_adaptation']
+
+            for col in env_columns:
+                if col in df.columns:
+                    processed_df[col] = df[col]
+
+            print("Data processing completed successfully")  # Debug log
+            return processed_df
+
+        except Exception as e:
+            print(f"Error processing data: {str(e)}")
+            raise
+
+    def _get_season(self, date: datetime) -> str:
+        """Determine season based on date"""
+        month = date.month
+        if month in [12, 1, 2]:
+            return 'Winter'
+        elif month in [3, 4, 5]:
+            return 'Spring'
+        elif month in [6, 7, 8]:
+            return 'Summer'
+        else:
+            return 'Fall'
 
     def get_environmental_factors(self, student_id: int, date: datetime) -> dict:
         """Get environmental factors for a specific date"""
@@ -74,125 +172,7 @@ class DataProcessor:
             factors['noise_level'] = learning_env.noise_level
             factors['temperature'] = learning_env.temperature
 
-        # Get nutrition info
-        nutrition = self.db.query(NutritionLog).filter(
-            NutritionLog.student_id == student_id,
-            NutritionLog.date == date.date()
-        ).all()
-        if nutrition:
-            factors['high_sugar_meals'] = sum(1 for n in nutrition if n.sugar_intake_level == 'high')
-            factors['high_protein_meals'] = sum(1 for n in nutrition if n.protein_intake_level == 'high')
-
-        # Get routine changes
-        routine_changes = self.db.query(RoutineChange).filter(
-            RoutineChange.student_id == student_id,
-            RoutineChange.change_date <= date.date(),
-            RoutineChange.change_date + timedelta(days=RoutineChange.duration) >= date.date()
-        ).all()
-        factors['active_routine_changes'] = len(routine_changes)
-        factors['routine_adaptation'] = min([r.adaptation_level for r in routine_changes]) if routine_changes else 5
-
         return factors
-
-    def _get_season(self, date: datetime) -> str:
-        """Determine season based on date"""
-        month = date.month
-        if month in [12, 1, 2]:
-            return 'Winter'
-        elif month in [3, 4, 5]:
-            return 'Spring'
-        elif month in [6, 7, 8]:
-            return 'Summer'
-        else:
-            return 'Fall'
-
-    def calculate_weekly_stats(self, df):
-        """Calculate weekly behavior statistics"""
-        weekly_stats = df.groupby('week').agg({
-            'behavior_score': ['mean', 'std'],
-            'red_count': 'sum',
-            'yellow_count': 'sum',
-            'green_count': 'sum'
-        }).reset_index()
-        weekly_stats.columns = ['week', 'weekly_avg_score', 'weekly_score_std', 
-                             'weekly_red_total', 'weekly_yellow_total', 'weekly_green_total']
-        return weekly_stats
-
-    def process_data(self, student_id: int = None):
-        """Process and clean the behavioral data"""
-        try:
-            # Clean date column
-            self.data['date'] = self.data['Date'].apply(self.clean_date)
-            df = self.data.dropna(subset=['date'])  # Remove rows with invalid dates
-
-            # Convert behavior markers to numerical values
-            behavior_map = {
-                'r': 0,  # Red - needs significant support
-                'y': 1,  # Yellow - needs some support
-                'g': 2,  # Green - meeting expectations
-                'G': 2,  # Alternate Green format
-                'a': np.nan,  # Absent
-                '0': np.nan,
-                '': np.nan
-            }
-
-            # Calculate behavior scores for time slots
-            behavior_scores = df[self.time_slots].replace(behavior_map)
-
-            # Calculate daily metrics
-            df['behavior_score'] = behavior_scores.mean(axis=1)
-            df['red_count'] = behavior_scores.apply(lambda x: (x == 0).sum(), axis=1)
-            df['yellow_count'] = behavior_scores.apply(lambda x: (x == 1).sum(), axis=1)
-            df['green_count'] = behavior_scores.apply(lambda x: (x == 2).sum(), axis=1)
-
-            # Extract temporal features
-            df['day_of_week'] = df['date'].dt.dayofweek
-            df['month'] = df['date'].dt.month
-            df['week'] = df['date'].dt.isocalendar().week
-            df['is_monday'] = (df['day_of_week'] == 0).astype(int)
-            df['is_friday'] = (df['day_of_week'] == 4).astype(int)
-            df['season'] = df['date'].apply(lambda x: self._get_season(x))
-
-            # Calculate rolling statistics
-            df['rolling_avg_7d'] = df['behavior_score'].rolling(window=7, min_periods=1).mean()
-            df['rolling_std_7d'] = df['behavior_score'].rolling(window=7, min_periods=1).std()
-
-            # Calculate behavioral trends
-            df['behavior_trend'] = df['behavior_score'].diff().fillna(0)
-            df['weekly_improvement'] = df['rolling_avg_7d'] - df['rolling_avg_7d'].shift(7)
-
-            # Add environmental factors if database session is available
-            if self.db and student_id:
-                env_features = df['date'].apply(
-                    lambda x: self.get_environmental_factors(student_id, x)
-                ).tolist()
-
-                env_df = pd.DataFrame(env_features)
-                if not env_df.empty:
-                    df = pd.concat([df, env_df], axis=1)
-
-            # Select features for the final dataset
-            processed_df = df[[
-                'date', 'day_of_week', 'month', 'week', 'season',
-                'behavior_score', 'red_count', 'yellow_count', 'green_count',
-                'rolling_avg_7d', 'rolling_std_7d', 'behavior_trend',
-                'weekly_improvement'
-            ]].copy()
-
-            # Add environmental columns if they exist
-            env_columns = ['environmental_impact', 'seasonal_score', 'active_staff_changes',
-                         'noise_level', 'temperature', 'high_sugar_meals',
-                         'high_protein_meals', 'active_routine_changes', 'routine_adaptation']
-
-            for col in env_columns:
-                if col in df.columns:
-                    processed_df[col] = df[col]
-
-            return processed_df
-
-        except Exception as e:
-            print(f"Error processing data: {str(e)}")
-            raise
 
     def get_behavior_distribution(self):
         """Calculate behavior distribution"""

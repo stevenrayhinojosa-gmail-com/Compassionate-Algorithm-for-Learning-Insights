@@ -30,71 +30,7 @@ def get_db():
 def load_sample_data():
     """Load and parse the sample data file"""
     file_path = "attached_assets/CALITestPandas.xlsx - Applied Behavior Analysis.csv"
-    return file_path  # Return the file path instead of reading it here
-
-def store_behavior_data(processed_data, student_name="Default Student"):
-    """Store processed behavior data in the database"""
-    db = get_db()
-    try:
-        # Create or get student
-        student = db.query(Student).filter(Student.name == student_name).first()
-        if not student:
-            student = Student(name=student_name)
-            db.add(student)
-            db.commit()
-            db.refresh(student)
-
-        # Store behavior records
-        for _, row in processed_data.iterrows():
-            record = BehaviorRecord(
-                date=row['date'],
-                student_id=student.id,
-                behavior_score=row['behavior_score'],
-                red_count=row['red_count'],
-                yellow_count=row['yellow_count'],
-                green_count=row['green_count'],
-                rolling_avg_7d=row['rolling_avg_7d'],
-                rolling_std_7d=row['rolling_std_7d'],
-                behavior_trend=row['behavior_trend'],
-                weekly_improvement=row['weekly_improvement']
-            )
-            db.add(record)
-
-        db.commit()
-        return True
-    except Exception as e:
-        db.rollback()
-        st.error(f"Error storing data: {str(e)}")
-        return False
-    finally:
-        db.close()
-
-def plot_weekly_patterns(data):
-    """Plot weekly behavior patterns"""
-    fig, ax = plt.subplots(figsize=(10, 6))
-    avg_by_day = data.groupby('day_of_week')['behavior_score'].mean()
-    sns.barplot(x=avg_by_day.index, y=avg_by_day.values, 
-                palette=sns.color_palette("RdYlGn", n_colors=5))
-    plt.title("Average Behavior Score by Day of Week")
-    plt.xlabel("Day of Week (0=Monday, 4=Friday)")
-    plt.ylabel("Average Score")
-    return fig
-
-def plot_behavior_trends(data):
-    """Plot behavior trends over time"""
-    fig, ax = plt.subplots(figsize=(12, 6))
-    plt.plot(data['date'], data['behavior_score'], label='Daily Score', alpha=0.5)
-    plt.plot(data['date'], data['rolling_avg_7d'], label='7-day Average', linewidth=2)
-    plt.fill_between(data['date'], 
-                     data['rolling_avg_7d'] - data['rolling_std_7d'],
-                     data['rolling_avg_7d'] + data['rolling_std_7d'], 
-                     alpha=0.2)
-    plt.title("Behavior Score Trends")
-    plt.xlabel("Date")
-    plt.ylabel("Score")
-    plt.legend()
-    plt.xticks(rotation=45)
-    return fig
+    return file_path
 
 def configure_alerts(student_name, db):
     """Configure alert settings for a student"""
@@ -170,368 +106,32 @@ def display_alerts(student_name, db):
                     st.write("(Predicted)")
                 st.markdown("</p>", unsafe_allow_html=True)
 
-def manage_medications(student_name, db):
-    """Manage student medications"""
-    st.header("Medication Management")
+def plot_weekly_patterns(data):
+    """Plot weekly behavior patterns"""
+    fig, ax = plt.subplots(figsize=(10, 6))
+    avg_by_day = data.groupby('day_of_week')['behavior_score'].mean()
+    sns.barplot(x=avg_by_day.index, y=avg_by_day.values, 
+                palette=sns.color_palette("RdYlGn", n_colors=5))
+    plt.title("Average Behavior Score by Day of Week")
+    plt.xlabel("Day of Week (0=Monday, 4=Friday)")
+    plt.ylabel("Average Score")
+    return fig
 
-    # Get or create student
-    student = db.query(Student).filter(Student.name == student_name).first()
-    if not student:
-        st.warning("Please save some behavior data first to manage medications.")
-        return
-
-    # Display current medications
-    current_meds = db.query(MedicationRecord).filter(
-        MedicationRecord.student_id == student.id,
-        MedicationRecord.is_active == True
-    ).all()
-
-    if current_meds:
-        st.subheader("Current Medications")
-        for med in current_meds:
-            with st.expander(f"📋 {med.medication_name}"):
-                st.write(f"Dosage: {med.dosage}")
-                st.write(f"Frequency: {med.frequency}")
-                st.write(f"Started: {med.start_date}")
-                if med.notes:
-                    st.write(f"Notes: {med.notes}")
-
-                # Option to mark medication as discontinued
-                if st.button(f"Discontinue {med.medication_name}", key=f"disc_{med.id}"):
-                    med.is_active = False
-                    med.end_date = date.today()
-                    db.commit()
-                    st.success(f"{med.medication_name} marked as discontinued.")
-                    st.rerun()
-
-    # Form to add new medication
-    st.subheader("Add New Medication")
-    with st.form("new_medication_form"):
-        med_name = st.text_input("Medication Name")
-        dosage = st.text_input("Dosage (e.g., '10mg')")
-        frequency = st.selectbox(
-            "Frequency",
-            ["Once daily", "Twice daily", "Three times daily", "As needed", "Other"]
-        )
-        if frequency == "Other":
-            frequency = st.text_input("Specify frequency")
-
-        start_date = st.date_input("Start Date")
-        notes = st.text_area("Notes (optional)")
-
-        if st.form_submit_button("Add Medication"):
-            new_med = MedicationRecord(
-                student_id=student.id,
-                medication_name=med_name,
-                dosage=dosage,
-                frequency=frequency,
-                start_date=start_date,
-                notes=notes,
-                is_active=True
-            )
-            db.add(new_med)
-            db.commit()
-            st.success("Medication added successfully!")
-            st.rerun()
-
-    # Medication Log Section
-    st.subheader("Medication Log")
-
-    # Log missed medication
-    with st.expander("Log Missed Medication"):
-        active_meds = [(med.id, med.medication_name) for med in current_meds]
-        if active_meds:
-            med_id = st.selectbox(
-                "Select Medication",
-                options=[m[0] for m in active_meds],
-                format_func=lambda x: next(m[1] for m in active_meds if m[0] == x)
-            )
-            missed_date = st.date_input("Date Missed")
-            reason = st.text_input("Reason for missing")
-            notes = st.text_area("Additional Notes")
-
-            if st.button("Log Missed Dose"):
-                log = MedicationLog(
-                    medication_id=med_id,
-                    timestamp=datetime.combine(missed_date, datetime.min.time()),
-                    status="missed",
-                    reason_if_missed=reason,
-                    notes=notes
-                )
-                db.add(log)
-                db.commit()
-                st.success("Missed medication logged successfully!")
-        else:
-            st.info("No active medications to log.")
-
-    # Display medication history
-    st.subheader("Medication History")
-    all_meds = db.query(MedicationRecord).filter(
-        MedicationRecord.student_id == student.id
-    ).all()
-
-    if all_meds:
-        for med in all_meds:
-            with st.expander(
-                f"{'🟢' if med.is_active else '⚫'} {med.medication_name} "
-                f"({med.start_date} - {med.end_date or 'Present'})"
-            ):
-                st.write(f"Dosage: {med.dosage}")
-                st.write(f"Frequency: {med.frequency}")
-                if med.notes:
-                    st.write(f"Notes: {med.notes}")
-
-                # Display medication logs
-                logs = db.query(MedicationLog).filter(
-                    MedicationLog.medication_id == med.id
-                ).order_by(MedicationLog.timestamp.desc()).all()
-
-                if logs:
-                    st.write("### Medication Logs")
-                    for log in logs:
-                        status_color = {
-                            "taken": "🟢",
-                            "missed": "🔴",
-                            "late": "🟡"
-                        }.get(log.status, "⚪")
-                        st.write(
-                            f"{status_color} {log.timestamp.strftime('%Y-%m-%d %H:%M')} - "
-                            f"{log.status.title()}"
-                        )
-                        if log.reason_if_missed:
-                            st.write(f"Reason: {log.reason_if_missed}")
-                        if log.notes:
-                            st.write(f"Notes: {log.notes}")
-
-
-def manage_environmental_factors(student_name, db):
-    """Manage environmental and contextual factors"""
-    st.header("Environmental Factors Management")
-
-    # Get or create student
-    student = db.query(Student).filter(Student.name == student_name).first()
-    if not student:
-        st.warning("Please save some behavior data first to manage environmental factors.")
-        return
-
-    # Create tabs for different types of factors
-    env_tab1, env_tab2, env_tab3, env_tab4 = st.tabs([
-        "Learning Environment",
-        "Staff & Routine Changes",
-        "Nutrition & Health",
-        "Seasonal Patterns"
-    ])
-
-    with env_tab1:
-        st.subheader("Learning Environment Setup")
-
-        # Form to add/update learning environment
-        with st.form("learning_environment_form"):
-            classroom_type = st.selectbox(
-                "Classroom Type",
-                ["Regular", "Special Education", "Resource Room", "Integrated", "Other"]
-            )
-            seating_position = st.selectbox(
-                "Seating Position",
-                ["Front", "Middle", "Back", "Near Window", "Near Door", "Other"]
-            )
-            noise_level = st.select_slider(
-                "Noise Level",
-                options=["Very Low", "Low", "Moderate", "High", "Very High"]
-            )
-            lighting_type = st.selectbox(
-                "Lighting Type",
-                ["Natural", "Fluorescent", "LED", "Mixed", "Other"]
-            )
-            temperature = st.slider("Temperature (°F)", 65, 85, 72)
-            start_date = st.date_input("Start Date")
-            notes = st.text_area("Additional Notes")
-
-            if st.form_submit_button("Save Learning Environment"):
-                new_env = LearningEnvironment(
-                    student_id=student.id,
-                    classroom_type=classroom_type,
-                    seating_position=seating_position,
-                    noise_level=noise_level,
-                    lighting_type=lighting_type,
-                    temperature=temperature,
-                    start_date=start_date,
-                    notes=notes
-                )
-                db.add(new_env)
-                db.commit()
-                st.success("Learning environment settings saved!")
-
-    with env_tab2:
-        st.subheader("Staff Changes")
-        with st.form("staff_change_form"):
-            staff_role = st.selectbox(
-                "Staff Role",
-                ["Teacher", "Aide", "Therapist", "Specialist", "Other"]
-            )
-            change_type = st.selectbox(
-                "Change Type",
-                ["New Staff", "Substitute", "Departure", "Return"]
-            )
-            change_date = st.date_input("Change Date")
-            adjustment_period = st.number_input(
-                "Expected Adjustment Period (days)",
-                min_value=1,
-                value=14
-            )
-            impact_observed = st.text_area("Observed Impact")
-
-            if st.form_submit_button("Record Staff Change"):
-                staff_change = StaffChange(
-                    student_id=student.id,
-                    staff_role=staff_role,
-                    change_type=change_type,
-                    change_date=change_date,
-                    adjustment_period=adjustment_period,
-                    impact_observed=impact_observed
-                )
-                db.add(staff_change)
-                db.commit()
-                st.success("Staff change recorded!")
-
-        st.subheader("Routine Changes")
-        with st.form("routine_change_form"):
-            routine_type = st.selectbox(
-                "Change Type",
-                ["Schedule", "Activity", "Transportation", "Therapy", "Other"]
-            )
-            description = st.text_area("Change Description")
-            duration = st.number_input(
-                "Expected Duration (days)",
-                min_value=1,
-                value=7
-            )
-            adaptation_level = st.slider(
-                "Adaptation Level (1-5)",
-                1, 5, 3,
-                help="1=Significant difficulty, 5=Well adapted"
-            )
-            routine_date = st.date_input("Change Start Date")
-            routine_notes = st.text_area("Additional Notes")
-
-            if st.form_submit_button("Record Routine Change"):
-                routine_change = RoutineChange(
-                    student_id=student.id,
-                    change_type=routine_type,
-                    description=description,
-                    duration=duration,
-                    adaptation_level=adaptation_level,
-                    change_date=routine_date,
-                    notes=routine_notes
-                )
-                db.add(routine_change)
-                db.commit()
-                st.success("Routine change recorded!")
-
-    with env_tab3:
-        st.subheader("Nutrition Log")
-        with st.form("nutrition_log_form"):
-            meal_type = st.selectbox(
-                "Meal Type",
-                ["Breakfast", "Morning Snack", "Lunch", "Afternoon Snack"]
-            )
-            food_items = st.text_area("Food Items Consumed")
-            sugar_level = st.select_slider(
-                "Sugar Intake Level",
-                options=["Low", "Moderate", "High"]
-            )
-            protein_level = st.select_slider(
-                "Protein Intake Level",
-                options=["Low", "Moderate", "High"]
-            )
-            meal_date = st.date_input("Meal Date")
-            meal_notes = st.text_area("Additional Notes")
-
-            if st.form_submit_button("Add Nutrition Entry"):
-                nutrition_log = NutritionLog(
-                    student_id=student.id,
-                    meal_type=meal_type,
-                    food_items=food_items,
-                    sugar_intake_level=sugar_level,
-                    protein_intake_level=protein_level,
-                    date=meal_date,
-                    notes=meal_notes
-                )
-                db.add(nutrition_log)
-                db.commit()
-                st.success("Nutrition entry added!")
-
-    with env_tab4:
-        st.subheader("Seasonal Patterns")
-        with st.form("seasonal_pattern_form"):
-            season = st.selectbox(
-                "Season",
-                ["Spring", "Summer", "Fall", "Winter"]
-            )
-            year = st.number_input("Year", value=datetime.now().year, min_value=2020, max_value=2030)
-            avg_score = st.number_input("Average Behavior Score", min_value=0.0, max_value=2.0, value=1.0)
-            impact = st.text_area("Seasonal Impact Description")
-            seasonal_notes = st.text_area("Additional Notes")
-
-            if st.form_submit_button("Add Seasonal Pattern"):
-                seasonal_pattern = SeasonalPattern(
-                    student_id=student.id,
-                    season=season,
-                    year=year,
-                    avg_behavior_score=avg_score,
-                    seasonal_impact=impact,
-                    notes=seasonal_notes
-                )
-                db.add(seasonal_pattern)
-                db.commit()
-                st.success("Seasonal pattern recorded!")
-
-    # Display historical data
-    st.header("Environmental Factors History")
-
-    # Staff Changes History
-    with st.expander("📋 Staff Changes History"):
-        staff_changes = db.query(StaffChange).filter(
-            StaffChange.student_id == student.id
-        ).order_by(StaffChange.change_date.desc()).all()
-
-        for change in staff_changes:
-            st.write(f"**{change.staff_role}** - {change.change_type}")
-            st.write(f"Date: {change.change_date}")
-            st.write(f"Adjustment Period: {change.adjustment_period} days")
-            if change.impact_observed:
-                st.write(f"Impact: {change.impact_observed}")
-            st.divider()
-
-    # Routine Changes History
-    with st.expander("📋 Routine Changes History"):
-        routine_changes = db.query(RoutineChange).filter(
-            RoutineChange.student_id == student.id
-        ).order_by(RoutineChange.change_date.desc()).all()
-
-        for change in routine_changes:
-            st.write(f"**{change.change_type}** Change")
-            st.write(f"Date: {change.change_date}")
-            st.write(f"Duration: {change.duration} days")
-            st.write(f"Adaptation Level: {change.adaptation_level}/5")
-            if change.description:
-                st.write(f"Description: {change.description}")
-            st.divider()
-
-    # Nutrition History
-    with st.expander("📋 Nutrition History"):
-        nutrition_logs = db.query(NutritionLog).filter(
-            NutritionLog.student_id == student.id
-        ).order_by(NutritionLog.date.desc()).all()
-
-        for log in nutrition_logs:
-            st.write(f"**{log.meal_type}** - {log.date}")
-            st.write(f"Food Items: {log.food_items}")
-            st.write(f"Sugar Level: {log.sugar_intake_level}")
-            st.write(f"Protein Level: {log.protein_intake_level}")
-            if log.notes:
-                st.write(f"Notes: {log.notes}")
-            st.divider()
+def plot_behavior_trends(data):
+    """Plot behavior trends over time"""
+    fig, ax = plt.subplots(figsize=(12, 6))
+    plt.plot(data['date'], data['behavior_score'], label='Daily Score', alpha=0.5)
+    plt.plot(data['date'], data['rolling_avg_7d'], label='7-day Average', linewidth=2)
+    plt.fill_between(data['date'], 
+                     data['rolling_avg_7d'] - data['rolling_std_7d'],
+                     data['rolling_avg_7d'] + data['rolling_std_7d'], 
+                     alpha=0.2)
+    plt.title("Behavior Score Trends")
+    plt.xlabel("Date")
+    plt.ylabel("Score")
+    plt.legend()
+    plt.xticks(rotation=45)
+    return fig
 
 def display_next_day_predictions(metrics, predictions_df):
     """Display next day predictions in a user-friendly format"""
@@ -604,6 +204,51 @@ def display_next_day_predictions(metrics, predictions_df):
         """
     )
 
+def store_behavior_data(processed_data, student_name="Default Student"):
+    """Store processed behavior data in the database"""
+    db = get_db()
+    try:
+        # Create or get student
+        student = db.query(Student).filter(Student.name == student_name).first()
+        if not student:
+            student = Student(name=student_name)
+            db.add(student)
+            db.commit()
+            db.refresh(student)
+
+        # Store behavior records
+        for _, row in processed_data.iterrows():
+            record = BehaviorRecord(
+                date=row['date'],
+                student_id=student.id,
+                behavior_score=row['behavior_score'],
+                red_count=row['red_count'],
+                yellow_count=row['yellow_count'],
+                green_count=row['green_count'],
+                rolling_avg_7d=row['rolling_avg_7d'],
+                rolling_std_7d=row['rolling_std_7d'],
+                behavior_trend=row['behavior_trend'],
+                weekly_improvement=row['weekly_improvement']
+            )
+            db.add(record)
+
+        db.commit()
+        return True
+    except Exception as e:
+        db.rollback()
+        st.error(f"Error storing data: {str(e)}")
+        return False
+    finally:
+        db.close()
+
+def manage_medications(student_name, db):
+    st.header("Medication Management")
+    # Add your medication management code here
+
+def manage_environmental_factors(student_name, db):
+    st.header("Environmental Factors")
+    # Add your environmental factors management code here
+
 def main():
     st.title("Student Behavior Analysis and Forecasting")
 
@@ -621,13 +266,10 @@ def main():
     # Display active alerts
     display_alerts(student_name, db)
 
-    # Load the sample data
-    file_path = load_sample_data()
-
     try:
-        # Process data -  The crucial change is here.  The file needs to be read.
-        data = pd.read_csv(file_path) # Read the CSV using the file path
-        processor = DataProcessor(data, db)
+        # Load and process data
+        file_path = load_sample_data()
+        processor = DataProcessor(file_path, db)
         processed_data = processor.process_data(
             student_id=db.query(Student).filter(Student.name == student_name).first().id
             if db.query(Student).filter(Student.name == student_name).first()
@@ -730,6 +372,7 @@ def main():
 
     except Exception as e:
         st.error(f"Error processing data: {str(e)}")
+        print(f"Detailed error: {str(e)}")  # Add detailed error logging
     finally:
         db.close()
 
