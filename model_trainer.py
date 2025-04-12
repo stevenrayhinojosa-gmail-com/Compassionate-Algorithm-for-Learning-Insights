@@ -15,12 +15,22 @@ class ModelTrainer:
         self.model = None
         self.preprocessor = None
 
-        # Define feature groups
+        # Define feature groups - core behavioral features
         self.numeric_features = [
             'day_of_week', 'month', 'week',
             'rolling_avg_7d', 'rolling_std_7d',
             'behavior_trend', 'weekly_improvement'
         ]
+
+        # Add environmental factors if available
+        env_features = ['environmental_impact', 'seasonal_score', 
+                       'active_staff_changes', 'noise_level', 
+                       'temperature', 'high_sugar_meals',
+                       'high_protein_meals', 'active_routine_changes']
+        
+        for feature in env_features:
+            if feature in data.columns:
+                self.numeric_features.append(feature)
 
         self.categorical_features = ['season']
 
@@ -148,6 +158,31 @@ class ModelTrainer:
             features['rolling_std_7d'] = self.data['rolling_std_7d'].iloc[-1]
             features['behavior_trend'] = self.data['behavior_trend'].iloc[-1]
             features['weekly_improvement'] = self.data['weekly_improvement'].iloc[-1]
+            
+            # Add all environmental factors that were used in training
+            env_features = ['environmental_impact', 'seasonal_score', 
+                           'active_staff_changes', 'noise_level', 
+                           'temperature', 'high_sugar_meals',
+                           'high_protein_meals', 'active_routine_changes']
+            
+            for feature in env_features:
+                if feature in self.data.columns:
+                    # Use the most recent value for environmental factors
+                    features[feature] = self.data[feature].iloc[-1]
+            
+            # Add time-of-day effects (morning, midday, afternoon patterns)
+            hour_of_day = [t.hour + t.minute/60 for t in time_slots]
+            
+            # Morning dip (8:30-10:00), midday slump (12:30-1:30), end-of-day fatigue (after 2:30)
+            # These are common patterns in student behavior
+            for i, hour in enumerate(hour_of_day):
+                # Adjust behavior trend based on time of day
+                if 8.5 <= hour < 10:  # Morning adjustment
+                    features.loc[i, 'behavior_trend'] = features.loc[i, 'behavior_trend'] - 0.1
+                elif 12.5 <= hour < 13.5:  # Lunch/midday adjustment
+                    features.loc[i, 'behavior_trend'] = features.loc[i, 'behavior_trend'] - 0.15
+                elif hour >= 14.5:  # End of day adjustment
+                    features.loc[i, 'behavior_trend'] = features.loc[i, 'behavior_trend'] - 0.2
 
             # Transform features
             features_transformed = self.preprocessor.transform(features)

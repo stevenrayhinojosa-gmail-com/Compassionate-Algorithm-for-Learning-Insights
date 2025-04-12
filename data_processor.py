@@ -22,11 +22,24 @@ class DataProcessor:
         if pd.isna(date_str) or date_str == '':
             return None
         try:
-            # Remove weekday name if present
-            if ',' in date_str:
-                date_str = date_str.split(',')[1].strip()
-            # Convert to datetime using flexible parser
-            return pd.to_datetime(date_str, format='%m/%d/%Y')
+            # Special date format parsing for "Day, M/D/YYYY" or "Day, M//D/YYYY" formats
+            if ',' in str(date_str):
+                # Extract just the date part after the comma
+                date_part = date_str.split(',')[1].strip()
+            else:
+                date_part = date_str
+                
+            # Handle special case where there are double slashes
+            date_part = date_part.replace('//', '/')
+            
+            # Special handling for some inconsistent formats
+            if date_part.count('/') == 2:
+                # Try to handle M/D/YYYY format
+                return pd.to_datetime(date_part, format='%m/%d/%Y', errors='coerce')
+            else:
+                # Try more flexible parsing
+                return pd.to_datetime(date_part, errors='coerce')
+                
         except Exception as e:
             print(f"Error parsing date '{date_str}': {str(e)}")  # Debug log
             return None
@@ -36,11 +49,8 @@ class DataProcessor:
         try:
             print("Starting data processing...")  # Debug log
 
-            # Clean date column first
-            self.data['date'] = pd.to_datetime(
-                self.data['Date'].apply(lambda x: x.split(',')[1].strip() if ',' in str(x) else x),
-                format='%m/%d/%Y'
-            )
+            # Clean date column first - handle various formats including weekday prefixes
+            self.data['date'] = self.data['Date'].apply(self.clean_date)
 
             # Print the first few dates and dtype for verification
             print("Date column head:", self.data['date'].head())
