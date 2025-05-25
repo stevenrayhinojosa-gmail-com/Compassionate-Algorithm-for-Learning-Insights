@@ -12,8 +12,47 @@ class DataProcessor:
         """Initialize with file path and database session"""
         self.db = db
         # Skip the first two metadata rows and use the third row as header
-        # Read CSV with proper handling of the comma-separated date format
-        self.data = pd.read_csv(file_path, skiprows=2, quoting=3)  # QUOTE_NONE to preserve commas in dates
+        # Simple approach: read the CSV and manually fix the Date column
+        self.data = pd.read_csv(file_path, skiprows=2, on_bad_lines='skip', dtype=str)
+        
+        # Debug: Check what we actually loaded
+        print("CSV columns loaded:", list(self.data.columns)[:5])
+        print("First few rows of first column:", self.data.iloc[:5, 0].tolist())
+        
+        # If the first column is still just weekday names, try reading differently
+        if all(day in ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday', 'Date'] 
+               for day in self.data.iloc[:10, 0].fillna('').astype(str)):
+            print("Detected split date issue, attempting to read raw file...")
+            
+            # Read raw lines and manually parse
+            with open(file_path, 'r') as f:
+                lines = f.readlines()
+            
+            # Find lines with actual dates (containing both weekday and date)
+            data_rows = []
+            for line in lines[3:]:  # Skip first 3 rows
+                if line.strip() and ',' in line:
+                    parts = line.strip().split(',')
+                    # Look for pattern like "Tuesday" followed by "8/16/2022"
+                    if len(parts) >= 2 and '/' in parts[1] and any(c.isdigit() for c in parts[1]):
+                        # Reconstruct the proper date format
+                        full_date = f"{parts[0]},{parts[1]}"
+                        row_data = [full_date] + parts[2:]
+                        data_rows.append(row_data)
+            
+            if data_rows:
+                # Find maximum row length to handle inconsistent column counts
+                max_cols = max(len(row) for row in data_rows)
+                
+                # Pad shorter rows with empty strings
+                for row in data_rows:
+                    while len(row) < max_cols:
+                        row.append('')
+                
+                # Create DataFrame from properly parsed data
+                headers = ['Date'] + [f'Col_{i}' for i in range(max_cols-1)]
+                self.data = pd.DataFrame(data_rows, columns=headers)
+                print(f"Successfully reconstructed {len(data_rows)} rows with proper dates")
         # Get only the time slot columns (from 7:30 AM to 3:45 PM)
         self.time_slots = [col for col in self.data.columns if ':' in col and ('AM' in col or 'PM' in col)][:33]
         print(f"Found {len(self.time_slots)} time slots")  # Debug log

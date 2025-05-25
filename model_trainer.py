@@ -55,6 +55,14 @@ class ModelTrainer:
         X = self.data[self.numeric_features + self.categorical_features]
         y = self.data['behavior_score']
 
+        # Clean data to remove NaN and infinite values
+        X = X.fillna(0)
+        y = y.fillna(0)
+        
+        # Replace infinite values
+        X = X.replace([np.inf, -np.inf], 0)
+        y = y.replace([np.inf, -np.inf], 0)
+
         # Fit and transform features
         X_transformed = self.preprocessor.fit_transform(X)
 
