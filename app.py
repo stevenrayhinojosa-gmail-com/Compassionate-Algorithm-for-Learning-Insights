@@ -404,21 +404,44 @@ def main():
         # Add a divider before the tabs
         st.divider()
 
-        # Create tabs
-        tab1, tab2, tab3 = st.tabs([
-            "Behavior Analysis",
-            "Medication Management",
-            "Environmental Factors"
-        ])
+        # Create main tabs - Overview and Deeper Insights
+        tab1, tab2 = st.tabs(["🏠 Overview", "🔍 Deeper Insights"])
 
         with tab1:
-            if st.button("Save Data to Database"):
-                if store_behavior_data(processed_data, student_name):
-                    st.success("Data successfully saved to database!")
-                else:
-                    st.error("Failed to save data to database.")
+            st.header("📈 Quick Summary")
+            
+            # Simple metrics for overview
+            summary_stats = processor.get_summary_stats()
+            col1, col2, col3 = st.columns(3)
 
-            # Display summary statistics
+            with col1:
+                st.metric("Total Days", summary_stats['total_days'])
+
+            with col2:
+                st.metric("Average Score", f"{summary_stats['avg_score']:.2f}")
+
+            with col3:
+                st.metric("Weekly Trend", 
+                         "📈 Improving" if summary_stats['weekly_trend'] > 0 else "📉 Declining")
+
+        with tab2:
+            st.header("🔍 Detailed Analysis")
+            
+            # Create sub-tabs for all the detailed data
+            sub_tab1, sub_tab2, sub_tab3 = st.tabs([
+                "📊 Data Analysis",
+                "💊 Medication Management",
+                "🌡️ Environmental Factors"
+            ])
+
+            with sub_tab1:
+                if st.button("Save Data to Database"):
+                    if store_behavior_data(processed_data, student_name):
+                        st.success("Data successfully saved to database!")
+                    else:
+                        st.error("Failed to save data to database.")
+
+                # Display summary statistics
             st.header("Summary Statistics")
             summary_stats = processor.get_summary_stats()
             col1, col2, col3 = st.columns(3)
