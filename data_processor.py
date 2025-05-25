@@ -12,7 +12,8 @@ class DataProcessor:
         """Initialize with file path and database session"""
         self.db = db
         # Skip the first two metadata rows and use the third row as header
-        self.data = pd.read_csv(file_path, skiprows=2)
+        # Read CSV with proper handling of the comma-separated date format
+        self.data = pd.read_csv(file_path, skiprows=2, quoting=3)  # QUOTE_NONE to preserve commas in dates
         # Get only the time slot columns (from 7:30 AM to 3:45 PM)
         self.time_slots = [col for col in self.data.columns if ':' in col and ('AM' in col or 'PM' in col)][:33]
         print(f"Found {len(self.time_slots)} time slots")  # Debug log
