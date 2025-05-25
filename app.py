@@ -280,25 +280,19 @@ def display_next_day_predictions(metrics, predictions_df):
     
     # Add user feedback section
     st.divider()
-    st.subheader("📝 How accurate was this prediction?")
+    st.subheader("📝 Was this helpful?")
     
-    col1, col2, col3 = st.columns([1, 1, 2])
+    col1, col2 = st.columns(2)
     
     with col1:
-        if st.button("👍 Thumbs Up", help="The prediction was accurate"):
-            save_prediction_feedback(next_day, "thumbs_up", "The prediction was helpful and accurate")
+        if st.button("👍 Thumbs Up", help="This prediction was helpful"):
+            save_prediction_feedback(next_day, "thumbs_up", "The prediction was helpful")
             st.success("Thank you for your feedback!")
     
     with col2:
-        if st.button("👎 Thumbs Down", help="The prediction was not accurate"):
-            save_prediction_feedback(next_day, "thumbs_down", "The prediction was not accurate")
+        if st.button("👎 Thumbs Down", help="This prediction was not helpful"):
+            save_prediction_feedback(next_day, "thumbs_down", "The prediction was not helpful")
             st.success("Thank you for your feedback! This helps improve our predictions.")
-    
-    with col3:
-        feedback_comment = st.text_input("Additional comments (optional):", placeholder="What could be improved?")
-        if st.button("Submit Comment") and feedback_comment:
-            save_prediction_feedback(next_day, "comment", feedback_comment)
-            st.success("Thank you for your detailed feedback!")
 
 def store_behavior_data(processed_data, student_name="Default Student"):
     """Store processed behavior data in the database"""
