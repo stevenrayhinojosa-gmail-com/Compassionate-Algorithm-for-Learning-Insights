@@ -57,15 +57,35 @@ class DataProcessor:
         try:
             print("Starting data processing...")  # Debug log
 
-            # Clean date column first - handle various formats including weekday prefixes
-            self.data['date'] = self.data['Date'].apply(self.clean_date)
+            # Debug: Check the actual data structure
+            print("First 10 rows of Date column:")
+            print(self.data['Date'].head(10).tolist())
+            
+            # Look for rows containing actual dates (format: "Tuesday,8/16/2022")
+            # The CSV has weekday names followed by comma and date (no space after comma)
+            date_pattern = r'[A-Za-z]+,\d+/+\d+/\d+'
+            date_mask = self.data['Date'].astype(str).str.contains(date_pattern, na=False)
+            valid_data = self.data[date_mask].copy()
+            print(f"Found {len(valid_data)} rows with weekday+date patterns")
+
+            if len(valid_data) == 0:
+                # Fallback: Look for any rows with MM/DD/YYYY pattern
+                date_mask = self.data['Date'].astype(str).str.contains(r'\d+/+\d+/\d+', na=False)
+                valid_data = self.data[date_mask].copy()
+                print(f"Fallback: Found {len(valid_data)} rows with date patterns")
+
+            if len(valid_data) == 0:
+                raise ValueError("No valid date rows found in the data")
+
+            # Clean date column
+            valid_data['date'] = valid_data['Date'].apply(self.clean_date)
 
             # Print the first few dates and dtype for verification
-            print("Date column head:", self.data['date'].head())
-            print("Date column dtype:", self.data['date'].dtype)
+            print("Date column head:", valid_data['date'].head())
+            print("Date column dtype:", valid_data['date'].dtype)
 
-            # Remove rows with invalid dates
-            df = self.data.dropna(subset=['date'])
+            # Remove rows with invalid dates after parsing
+            df = valid_data.dropna(subset=['date'])
             print(f"Rows after date cleaning: {len(df)}")  # Debug log
 
             # Convert behavior markers to numerical values

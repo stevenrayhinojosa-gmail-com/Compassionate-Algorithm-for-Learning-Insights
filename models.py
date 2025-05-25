@@ -1,6 +1,7 @@
 from sqlalchemy import Column, Integer, Float, Date, String, ForeignKey, Boolean, DateTime, Text
 from sqlalchemy.orm import relationship
 from database import Base
+from datetime import datetime
 
 class Student(Base):
     __tablename__ = "students"
@@ -193,3 +194,16 @@ class RoutineChange(Base):
 
     # Relationship
     student = relationship("Student", backref="routine_changes")
+
+class PredictionFeedback(Base):
+    __tablename__ = "prediction_feedback"
+
+    id = Column(Integer, primary_key=True, index=True)
+    student_id = Column(Integer, ForeignKey("students.id"))
+    prediction_date = Column(Date, index=True)
+    feedback_type = Column(String)  # 'thumbs_up', 'thumbs_down'
+    actual_outcome = Column(String, nullable=True)  # 'better', 'worse', 'same'
+    comments = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.now)
+
+    student = relationship("Student", backref="prediction_feedbacks")
