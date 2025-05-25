@@ -19,29 +19,37 @@ class DataProcessor:
 
     def clean_date(self, date_str):
         """Clean and standardize date format"""
-        if pd.isna(date_str) or date_str == '':
+        if pd.isna(date_str) or date_str == '' or str(date_str).strip() == '':
             return None
         try:
-            # Special date format parsing for "Day, M/D/YYYY" or "Day, M//D/YYYY" formats
-            if ',' in str(date_str):
-                # Extract just the date part after the comma
-                date_part = date_str.split(',')[1].strip()
+            date_str = str(date_str).strip()
+            
+            # Handle the specific format: "Tuesday,8/16/2022" or "Tuesday, 8/16/2022"
+            if ',' in date_str:
+                # Split by comma and take the date part
+                parts = date_str.split(',')
+                if len(parts) >= 2:
+                    date_part = parts[1].strip()
+                else:
+                    date_part = parts[0].strip()
             else:
                 date_part = date_str
                 
-            # Handle special case where there are double slashes
+            # Handle special case where there are double slashes like "8//19/2022"
             date_part = date_part.replace('//', '/')
             
-            # Special handling for some inconsistent formats
+            # Skip non-date entries
+            if date_part.lower() in ['date', ':', '', 'nan']:
+                return None
+                
+            # Try to parse the date
             if date_part.count('/') == 2:
-                # Try to handle M/D/YYYY format
                 return pd.to_datetime(date_part, format='%m/%d/%Y', errors='coerce')
             else:
-                # Try more flexible parsing
                 return pd.to_datetime(date_part, errors='coerce')
                 
         except Exception as e:
-            print(f"Error parsing date '{date_str}': {str(e)}")  # Debug log
+            print(f"Error parsing date '{date_str}': {str(e)}")
             return None
 
     def process_data(self, student_id: int = None):

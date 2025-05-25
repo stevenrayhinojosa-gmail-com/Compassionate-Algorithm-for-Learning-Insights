@@ -42,7 +42,7 @@ class ModelTrainer:
         ])
 
         categorical_transformer = Pipeline([
-            ('onehot', OneHotEncoder(drop='first', sparse=False))
+            ('onehot', OneHotEncoder(drop='first', sparse_output=False))
         ])
 
         # Create column transformer
