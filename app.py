@@ -137,7 +137,7 @@ def display_next_day_predictions(metrics, predictions_df):
     """Display next day predictions in a user-friendly format"""
     next_day = predictions_df['time'].dt.date.iloc[0]
 
-    st.header(f"🔮 Behavior Predictions for {next_day.strftime('%A, %B %d')}")
+    st.header(f"Behavior Predictions for {next_day.strftime('%A, %B %d')}")
     
     # Create a prominent visual representation of the day's prediction
     behavior_counts = predictions_df['predicted_category'].value_counts()
