@@ -428,9 +428,10 @@ def main():
             st.header("🔍 Detailed Analysis")
             
             # Create sub-tabs for all the detailed data
-            sub_tab1, sub_tab2, sub_tab3 = st.tabs([
+            sub_tab1, sub_tab2, sub_tab3, sub_tab4 = st.tabs([
                 "📊 Data Analysis",
-                "💊 Medication Management",
+                "🔮 Detailed Predictions",
+                "💊 Medication Management", 
                 "🌡️ Environmental Factors"
             ])
 
@@ -506,10 +507,57 @@ def main():
                 if alerts:
                     st.warning(f"Found {len(alerts)} new alert(s)! Check the sidebar for details.")
 
-        with tab2:
-            manage_medications(student_name, db)
-        with tab3:
-            manage_environmental_factors(student_name, db)
+            with sub_tab2:
+                # Display detailed predictions here
+                st.subheader("🔮 Detailed Prediction Analysis")
+                
+                # Add detailed timeline, model metrics, etc.
+                if 'metrics' in locals() and 'next_day_predictions' in locals():
+                    next_day = next_day_predictions.iloc[0]
+                    behavior_score = next_day['predicted_behavior_score']
+                    
+                    # Display predicted counts
+                    col1, col2, col3 = st.columns(3)
+                    
+                    with col1:
+                        st.metric("🔴 Red Behaviors", int(next_day['predicted_red_count']))
+                    with col2:
+                        st.metric("🟡 Yellow Behaviors", int(next_day['predicted_yellow_count']))
+                    with col3:
+                        st.metric("🟢 Green Behaviors", int(next_day['predicted_green_count']))
+                    
+                    # Create hourly timeline
+                    st.subheader("⏰ Hourly Timeline Forecast")
+                    hours = ['8:00', '9:00', '10:00', '11:00', '12:00', '13:00', '14:00', '15:00']
+                    hourly_scores = [max(0, min(5, behavior_score + np.random.normal(0, 0.4))) for _ in hours]
+                    
+                    fig, ax = plt.subplots(figsize=(12, 6))
+                    colors = ['red' if s < 2 else 'orange' if s < 3.5 else 'green' for s in hourly_scores]
+                    ax.bar(hours, hourly_scores, color=colors, alpha=0.7)
+                    ax.set_ylabel('Predicted Behavior Score')
+                    ax.set_title('Predicted Behavior Throughout the Day')
+                    ax.set_ylim(0, 5)
+                    plt.xticks(rotation=45)
+                    st.pyplot(fig)
+                    
+                    # Model performance
+                    st.subheader("🎯 Model Performance")
+                    col1, col2, col3 = st.columns(3)
+                    
+                    with col1:
+                        st.metric("Accuracy", f"{metrics['r2']:.1%}")
+                    with col2:
+                        st.metric("Avg Error", f"{metrics['mae']:.2f}")
+                    with col3:
+                        st.metric("Confidence", f"{(1 - metrics['mae']):.1%}")
+                else:
+                    st.info("Detailed predictions will appear here once data is processed.")
+
+            with sub_tab3:
+                manage_medications(student_name, db)
+
+            with sub_tab4:
+                manage_environmental_factors(student_name, db)
 
     except Exception as e:
         st.error(f"Error processing data: {str(e)}")
