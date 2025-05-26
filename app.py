@@ -408,21 +408,8 @@ def main():
         tab1, tab2 = st.tabs(["🏠 Overview", "🔍 Deeper Insights"])
 
         with tab1:
-            st.header("📈 Quick Summary")
-            
-            # Simple metrics for overview
-            summary_stats = processor.get_summary_stats()
-            col1, col2, col3 = st.columns(3)
-
-            with col1:
-                st.metric("Total Days", summary_stats['total_days'])
-
-            with col2:
-                st.metric("Average Score", f"{summary_stats['avg_score']:.2f}")
-
-            with col3:
-                st.metric("Weekly Trend", 
-                         "📈 Improving" if summary_stats['weekly_trend'] > 0 else "📉 Declining")
+            st.header("📈 Quick Overview")
+            st.info("Your behavior prediction is shown above. For detailed analysis, check the 'Deeper Insights' tab.")
 
         with tab2:
             st.header("🔍 Detailed Analysis")
@@ -443,6 +430,36 @@ def main():
                         st.error("Failed to save data to database.")
 
                 # Display summary statistics
+                summary_stats = processor.get_summary_stats()
+                
+                # Display key metrics
+                col1, col2, col3 = st.columns(3)
+
+                with col1:
+                    st.metric("Total Days", summary_stats['total_days'])
+                    st.metric("Average Score", f"{summary_stats['avg_score']:.2f}")
+
+                with col2:
+                    st.metric("Best Day", summary_stats['best_day'].strftime('%Y-%m-%d'))
+                    st.metric("Most Challenging Day", 
+                             summary_stats['challenging_day'].strftime('%Y-%m-%d'))
+
+                with col3:
+                    st.metric("Weekly Trend", 
+                             f"{summary_stats['weekly_trend']:.2f}",
+                             delta=summary_stats['weekly_trend'])
+
+                # Display recent data
+                st.header("Recent Behavior Records")
+                try:
+                    st.dataframe(processed_data.tail().style.format({
+                        'behavior_score': '{:.2f}',
+                        'date': lambda x: x.strftime('%Y-%m-%d'),
+                        'rolling_avg_7d': '{:.2f}',
+                        'weekly_improvement': '{:.2f}'
+                    }))
+                except:
+                    st.dataframe(processed_data.tail())
             st.header("Summary Statistics")
             summary_stats = processor.get_summary_stats()
             col1, col2, col3 = st.columns(3)
