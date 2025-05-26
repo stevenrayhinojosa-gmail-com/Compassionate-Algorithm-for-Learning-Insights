@@ -277,10 +277,7 @@ def main():
     # Add student name input
     student_name = st.text_input("Student Name", "Default Student")
 
-    # Display alert configuration in sidebar
-    with st.sidebar:
-        if st.button("Configure Alerts"):
-            configure_alerts(student_name, db)
+
 
     # Display active alerts
     display_alerts(student_name, db)
@@ -316,11 +313,12 @@ def main():
             st.header("🔍 Detailed Analysis")
             
             # Create sub-tabs for all the detailed data
-            sub_tab1, sub_tab2, sub_tab3, sub_tab4 = st.tabs([
+            sub_tab1, sub_tab2, sub_tab3, sub_tab4, sub_tab5 = st.tabs([
                 "📊 Data Analysis",
                 "🔮 Detailed Predictions",
                 "💊 Medication Management", 
-                "🌡️ Environmental Factors"
+                "🌡️ Environmental Factors",
+                "⚠️ Configure Alerts"
             ])
 
             with sub_tab1:
@@ -476,6 +474,9 @@ def main():
 
             with sub_tab4:
                 manage_environmental_factors(student_name, db)
+
+            with sub_tab5:
+                configure_alerts(student_name, db)
 
     except Exception as e:
         st.error(f"Error processing data: {str(e)}")
