@@ -194,6 +194,31 @@ def display_next_day_predictions(metrics, predictions_df):
         if st.button("👎 Thumbs Down", help="This prediction was not helpful"):
             save_prediction_feedback(next_day, "thumbs_down", "The prediction was not helpful")
             st.success("Thank you for your feedback! This helps improve our predictions.")
+    
+    # Add data upload section
+    st.divider()
+    st.subheader("📁 Upload New Data")
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        uploaded_file = st.file_uploader(
+            "Upload CSV File", 
+            type=['csv'],
+            help="Upload a new CSV file with behavior data"
+        )
+        if uploaded_file is not None:
+            st.success("File uploaded successfully!")
+            # Here you could add logic to process the uploaded file
+    
+    with col2:
+        document_link = st.text_input(
+            "Or paste document link:",
+            placeholder="https://docs.google.com/spreadsheets/...",
+            help="Paste a link to a Google Sheets or other document"
+        )
+        if document_link:
+            st.info("Document link saved. Processing functionality can be added here.")
 
 def store_behavior_data(processed_data, student_name="Default Student"):
     """Store processed behavior data in the database"""
