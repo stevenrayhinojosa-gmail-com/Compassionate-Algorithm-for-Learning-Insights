@@ -173,110 +173,11 @@ def display_next_day_predictions(metrics, predictions_df):
         unsafe_allow_html=True
     )
 
-    # Display overall metrics
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        avg_score = predictions_df['predicted_score'].mean()
-        score_color = 'green' if avg_score > 1.4 else 'red' if avg_score < 0.6 else 'orange'
-        st.metric(
-            "Average Expected Score",
-            f"{avg_score:.2f}",
-            delta=f"{predictions_df['predicted_score'].iloc[-1] - avg_score:.2f}"
-        )
 
-    with col2:
-        st.metric(
-            "Green Periods Expected",
-            f"{green_count} of {total_periods}",
-            delta=f"{green_percentage:.0f}%"
-        )
 
-    with col3:
-        risk_level = predictions_df['risk_level'].mode().iloc[0]
-        st.metric("Overall Risk Level", risk_level)
-    
-    # Create a graphical timeline as a bar chart
-    chart_data = pd.DataFrame({
-        'Time': [row['time'].strftime('%I:%M %p') for _, row in predictions_df.iterrows()],
-        'Score': predictions_df['predicted_score'],
-        'Category': predictions_df['predicted_category']
-    })
-    
-    # Get periods of concern
-    concern_periods = predictions_df[predictions_df['predicted_category'] == 'Red']
-    if not concern_periods.empty:
-        st.warning(f"⚠️ **Periods of Concern**: Pay special attention from {concern_periods['time'].min().strftime('%I:%M %p')} to {concern_periods['time'].max().strftime('%I:%M %p')}")
-    
-    # Display a color-coded timeline chart
-    st.subheader("📊 Daily Prediction Timeline")
-    
-    # Create custom colors for bar chart
-    colors = []
-    for cat in chart_data['Category']:
-        if cat == 'Green':
-            colors.append('#2ecc71')  # Green
-        elif cat == 'Yellow':
-            colors.append('#f1c40f')  # Yellow
-        else:
-            colors.append('#e74c3c')  # Red
-    
-    # Create a bar chart with custom colors
-    fig, ax = plt.subplots(figsize=(12, 4))
-    bars = ax.bar(chart_data['Time'], chart_data['Score'], color=colors)
-    
-    # Add labels and formatting
-    plt.axhline(y=0.6, color='r', linestyle='--', alpha=0.5)
-    plt.axhline(y=1.4, color='g', linestyle='--', alpha=0.5)
-    plt.title('Predicted Behavior Score Throughout the Day')
-    plt.xlabel('Time')
-    plt.ylabel('Behavior Score')
-    plt.xticks(rotation=45)
-    plt.tight_layout()
-    
-    st.pyplot(fig)
 
-    # Display timeline of predictions
-    st.subheader("📅 Detailed Timeline")
 
-    # Create time blocks with predictions
-    for _, row in predictions_df.iterrows():
-        time_str = row['time'].strftime('%I:%M %p')
-        score = row['predicted_score']
-        category = row['predicted_category']
-        risk = row['risk_level']
 
-        # Color coding based on prediction
-        colors = {
-            'Green': 'rgba(0, 255, 0, 0.2)',
-            'Yellow': 'rgba(255, 255, 0, 0.2)',
-            'Red': 'rgba(255, 0, 0, 0.2)'
-        }
-
-        with st.container(border=True):
-            col1, col2, col3 = st.columns([1, 2, 1])
-            with col1:
-                st.write(f"**{time_str}**")
-            with col2:
-                st.markdown(
-                    f"""
-                    <div style="background-color: {colors[category]}; padding: 10px; border-radius: 5px;">
-                        Score: {score:.2f} ({category})
-                    </div>
-                    """,
-                    unsafe_allow_html=True
-                )
-            with col3:
-                st.write(f"Risk: {risk}")
-
-    # Add model performance disclaimer
-    st.info(
-        f"""
-        Model Performance Metrics:
-        - Accuracy (R² Score): {metrics['r2']:.2f}
-        - Mean Absolute Error: {metrics['mae']:.2f}
-        - Prediction Confidence: {(1 - metrics['mae']):.1%}
-        """
-    )
     
     # Add user feedback section
     st.divider()
