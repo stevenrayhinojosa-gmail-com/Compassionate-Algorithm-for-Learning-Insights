@@ -307,6 +307,10 @@ def main():
     # Display active alerts
     display_alerts(student_name, db)
 
+    # Initialize session state for controlling display
+    if 'show_predictions' not in st.session_state:
+        st.session_state.show_predictions = False
+    
     # Data upload section first
     st.divider()
     st.subheader("📁 Upload Your Data")
@@ -317,8 +321,14 @@ def main():
         uploaded_file = st.file_uploader(
             "Upload CSV File", 
             type=['csv'],
-            help="Upload your behavior data CSV file"
+            help="Upload your behavior data CSV file",
+            key="file_uploader"
         )
+        if uploaded_file is not None and not st.session_state.show_predictions:
+            if st.button("Process File", key="process_button"):
+                st.session_state.show_predictions = True
+                st.session_state.uploaded_file_data = uploaded_file
+                st.rerun()
     
     with col2:
         document_link = st.text_input(
@@ -327,30 +337,40 @@ def main():
             help="Paste a link to a Google Sheets or other document",
             key="document_link_input"
         )
+        if document_link and not st.session_state.show_predictions:
+            if st.button("Process Link", key="process_link_button"):
+                st.session_state.show_predictions = True
+                st.session_state.document_link_data = document_link
+                st.rerun()
     
-    # Only show predictions if data is uploaded
-    if uploaded_file is not None or document_link:
+    # Only show predictions if user has clicked process
+    if st.session_state.show_predictions:
         # Add home button when data is loaded
         col1, col2 = st.columns([1, 4])
         with col1:
             if st.button("🏠 Home", help="Return to upload new data", key="home_button"):
-                # Clear the file uploader state
-                for key in list(st.session_state.keys()):
-                    del st.session_state[key]
+                # Clear the prediction state
+                st.session_state.show_predictions = False
+                if 'uploaded_file_data' in st.session_state:
+                    del st.session_state.uploaded_file_data
+                if 'document_link_data' in st.session_state:
+                    del st.session_state.document_link_data
                 st.rerun()
         
         try:
             # Load and process data
-            if uploaded_file is not None:
+            if 'uploaded_file_data' in st.session_state:
                 st.success("Processing uploaded file...")
                 # Process the actual uploaded file
                 import tempfile
                 with tempfile.NamedTemporaryFile(delete=False, suffix='.csv') as tmp_file:
-                    tmp_file.write(uploaded_file.read())
+                    tmp_file.write(st.session_state.uploaded_file_data.read())
                     file_path = tmp_file.name
-            else:
+            elif 'document_link_data' in st.session_state:
                 st.info("Document link processing requires additional setup. Please upload a CSV file for now.")
                 st.stop()
+            else:
+                file_path = load_sample_data()  # Fallback
             
             processor = DataProcessor(file_path, db)
             student = db.query(Student).filter(Student.name == student_name).first()
