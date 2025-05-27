@@ -27,11 +27,12 @@ def main():
         # Call to action
         st.markdown("---")
         if st.button("🚀 Get Started with Behavior Analysis", type="primary", use_container_width=True):
-            st.success("Redirecting to the analysis dashboard...")
-            st.markdown("**Next:** You'll be taken to the main analysis page where you can:")
+            st.success("Ready to begin! Access your analysis dashboard on port 5000")
+            st.markdown("**Next:** Open the main analysis page where you can:")
             st.markdown("- View behavior predictions")
             st.markdown("- Upload your data")
             st.markdown("- Configure alerts and settings")
+            st.info("💡 **Quick Start:** The analysis dashboard is running on port 5000. Switch to that tab to begin analyzing student behavior data.")
     
     with col2:
         st.markdown("### 📊 Platform Features")
