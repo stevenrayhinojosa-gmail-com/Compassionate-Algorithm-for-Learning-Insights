@@ -295,6 +295,10 @@ def manage_environmental_factors(student_name, db):
 
 def main():
     st.title("Student Behavior Analysis and Forecasting")
+    
+    # Add navigation back to landing page
+    if st.button("← Back to Home", help="Return to the main landing page"):
+        st.info("Use the browser back button or refresh to return to the landing page")
 
     # Get database session
     db = get_db()
