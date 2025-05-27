@@ -1,9 +1,16 @@
 import streamlit as st
 
+# Set page config
+st.set_page_config(
+    page_title="Student Behavior Analysis Platform",
+    page_icon="📊",
+    layout="wide"
+)
+
 def main():
     
     # Main header
-    st.title("🎓 Student Behavior Analysis Platform")
+    st.title("🎓 CALI: Compassionate Algorithm for Learning Insights")
     st.subheader("AI-Powered Behavior Prediction & Wellness Management")
     
     # Hero section

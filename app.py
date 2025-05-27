@@ -294,7 +294,7 @@ def manage_environmental_factors(student_name, db):
     # Add your environmental factors management code here
 
 def main():
-    st.title("Student Behavior Analysis and Forecasting")
+    st.title("CALI: Compassionate Algorithm for Learning Insights")
     
     # Add navigation back to landing page
     if st.button("← Back to Home", help="Return to the main landing page"):
