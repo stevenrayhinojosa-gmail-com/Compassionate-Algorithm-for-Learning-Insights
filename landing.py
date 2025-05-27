@@ -31,6 +31,18 @@ def main():
         Transform your approach to student wellness with intelligent insights that matter.
         """)
         
+        # Data requirements section
+        st.markdown("### 📋 What Data Does CALI Need?")
+        st.markdown("""
+        Your behavior tracking data should include these three key components:
+        
+        • **Daily timestamps** - Dates when behaviors were recorded
+        • **Time-slot behaviors** - Red/Yellow/Green markers throughout each day  
+        • **Student information** - Basic details to track individual progress
+        
+        *Don't worry about formatting - CALI automatically cleans and processes messy data!*
+        """)
+        
         # Call to action
         st.markdown("---")
         if st.button("🚀 Get Started with Behavior Analysis", type="primary", use_container_width=True):
