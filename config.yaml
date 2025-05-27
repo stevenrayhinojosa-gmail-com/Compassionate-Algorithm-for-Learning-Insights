@@ -1,0 +1,135 @@
+# CALI Configuration File
+# Centralized settings for the Compassionate Algorithm for Learning Insights
+
+# Application Settings
+app:
+  name: "CALI: Compassionate Algorithm for Learning Insights"
+  version: "1.0.0"
+  debug_mode: false
+  max_upload_size_mb: 200
+
+# Model Configuration
+model:
+  # Training parameters
+  min_data_points: 50
+  retrain_threshold_days: 30
+  retrain_min_new_records: 50
+  validation_r2_threshold: 0.3
+  
+  # Feature settings
+  rolling_window_days: 7
+  prediction_horizon_days: 1
+  time_aware_filtering: true
+  seasonal_adjustment_weight: 0.3
+  recent_data_weight: 0.7
+  
+  # XGBoost parameters
+  xgb_n_estimators: 100
+  xgb_max_depth: 4
+  xgb_learning_rate: 0.1
+  xgb_subsample: 0.8
+
+# Data Processing
+data:
+  # Cleaning settings
+  auto_clean_data: true
+  remove_irrelevant_patterns: ["total", "summary", "note", "comment", "average", "mean"]
+  duplicate_handling: "keep_most_complete"
+  
+  # Date parsing
+  supported_date_formats:
+    - "%Y-%m-%d"
+    - "%m/%d/%Y"
+    - "%m-%d-%Y"
+    - "%d/%m/%Y"
+    - "%Y/%m/%d"
+  
+  # Behavior mapping
+  behavior_standardization:
+    red: ["red", "r", "1", "poor", "bad"]
+    yellow: ["yellow", "y", "2", "fair", "ok"]
+    green: ["green", "g", "3", "good", "great", "excellent"]
+
+# Database Settings
+database:
+  connection_retry_attempts: 3
+  connection_timeout_seconds: 30
+  ssl_mode: "prefer"
+  pool_size: 5
+  max_overflow: 10
+
+# Logging Configuration
+logging:
+  level: "INFO"
+  max_log_files: 10
+  max_log_size_mb: 50
+  retention_days: 90
+  
+  # What to log
+  log_uploads: true
+  log_predictions: true
+  log_errors: true
+  log_model_metrics: true
+  log_usage_stats: true
+
+# Alert System
+alerts:
+  # Default thresholds
+  default_behavior_threshold: 2.0
+  default_red_threshold: 3
+  default_trend_threshold: -0.5
+  
+  # Notification settings
+  sms_enabled: false
+  email_enabled: false
+  max_alerts_per_day: 5
+
+# File Management
+files:
+  # Storage paths
+  model_versions_dir: "model_versions"
+  logs_dir: "logs"
+  temp_dir: "temp"
+  
+  # Cleanup settings
+  cleanup_temp_files: true
+  keep_model_versions: 10
+  backup_retention_days: 30
+
+# Performance Settings
+performance:
+  # Streamlit optimization
+  enable_caching: true
+  cache_ttl_seconds: 3600
+  max_cached_datasets: 5
+  
+  # Processing limits
+  max_concurrent_predictions: 10
+  prediction_timeout_seconds: 60
+  batch_processing_size: 1000
+
+# Security Settings
+security:
+  # Data protection
+  anonymize_logs: false
+  encrypt_stored_data: false
+  require_authentication: false
+  
+  # API settings
+  rate_limiting: false
+  max_requests_per_minute: 100
+
+# Feature Flags
+features:
+  experimental_features: false
+  beta_model_improvements: true
+  advanced_analytics: true
+  medication_tracking: true
+  environmental_factors: true
+  
+# Export/Import Settings
+export:
+  default_format: "csv"
+  include_predictions: true
+  include_metadata: true
+  date_range_limit_days: 365
