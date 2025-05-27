@@ -295,10 +295,6 @@ def manage_environmental_factors(student_name, db):
 
 def main():
     st.title("CALI: Compassionate Algorithm for Learning Insights")
-    
-    # Add navigation back to landing page
-    if st.button("← Back to Home", help="Return to the main landing page"):
-        st.info("Use the browser back button or refresh to return to the landing page")
 
     # Get database session
     db = get_db()
@@ -333,6 +329,12 @@ def main():
     
     # Only show predictions if data is uploaded
     if uploaded_file is not None or document_link:
+        # Add home button when data is loaded
+        col1, col2 = st.columns([1, 4])
+        with col1:
+            if st.button("🏠 Home", help="Return to upload new data"):
+                st.rerun()
+        
         try:
             # Load and process data
             if uploaded_file is not None:
