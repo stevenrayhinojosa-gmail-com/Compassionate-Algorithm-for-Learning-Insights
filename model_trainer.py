@@ -25,8 +25,8 @@ class ModelTrainer:
         # Add environmental factors if available
         env_features = ['environmental_impact', 'seasonal_score', 
                        'active_staff_changes', 'noise_level', 
-                       'temperature', 'high_sugar_meals',
-                       'high_protein_meals', 'active_routine_changes']
+                       'temperature', 'change_in_diet',
+                       'active_routine_changes']
         
         for feature in env_features:
             if feature in data.columns:
@@ -224,8 +224,8 @@ class ModelTrainer:
             # Add all environmental factors that were used in training
             env_features = ['environmental_impact', 'seasonal_score', 
                            'active_staff_changes', 'noise_level', 
-                           'temperature', 'high_sugar_meals',
-                           'high_protein_meals', 'active_routine_changes']
+                           'temperature', 'change_in_diet',
+                           'active_routine_changes']
             
             for feature in env_features:
                 if feature in self.data.columns:
