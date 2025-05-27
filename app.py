@@ -311,38 +311,68 @@ def main():
     # Display active alerts
     display_alerts(student_name, db)
 
-    try:
-        # Load and process data
-        file_path = load_sample_data()
-        processor = DataProcessor(file_path, db)
-        processed_data = processor.process_data(
-            student_id=db.query(Student).filter(Student.name == student_name).first().id
-            if db.query(Student).filter(Student.name == student_name).first()
-            else None
+    # Data upload section first
+    st.divider()
+    st.subheader("📁 Upload Your Data")
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        uploaded_file = st.file_uploader(
+            "Upload CSV File", 
+            type=['csv'],
+            help="Upload your behavior data CSV file"
         )
-
-        # Train model and generate next day predictions
-        trainer = ModelTrainer(processed_data)
-        metrics, next_day_predictions = trainer.train_and_predict_next_day()
-
-        # Display next day predictions prominently at the top
-        display_next_day_predictions(metrics, next_day_predictions)
-
-        # Add a divider before the tabs
-        st.divider()
-
-        # Create main tabs - Overview and Deeper Insights
-        tab1, tab2 = st.tabs(["🏠 Overview", "🔍 Deeper Insights"])
-
-        with tab1:
-            st.header("📈 Quick Overview")
-            st.info("Your behavior prediction is shown above. For detailed analysis, check the 'Deeper Insights' tab.")
-
-        with tab2:
-            st.header("🔍 Detailed Analysis")
+    
+    with col2:
+        document_link = st.text_input(
+            "Or paste document link:",
+            placeholder="https://docs.google.com/spreadsheets/...",
+            help="Paste a link to a Google Sheets or other document"
+        )
+    
+    # Only show predictions if data is uploaded
+    if uploaded_file is not None or document_link:
+        try:
+            # Load and process data
+            if uploaded_file is not None:
+                st.success("Processing uploaded file...")
+                # Process the actual uploaded file
+                import tempfile
+                with tempfile.NamedTemporaryFile(delete=False, suffix='.csv') as tmp_file:
+                    tmp_file.write(uploaded_file.read())
+                    file_path = tmp_file.name
+            else:
+                st.info("Document link processing requires additional setup. Please upload a CSV file for now.")
+                st.stop()
             
-            # Create sub-tabs for all the detailed data
-            sub_tab1, sub_tab2, sub_tab3, sub_tab4, sub_tab5 = st.tabs([
+            processor = DataProcessor(file_path, db)
+            student = db.query(Student).filter(Student.name == student_name).first()
+            student_id = student.id if student else None
+            processed_data = processor.process_data(student_id=student_id)
+
+            # Train model and generate next day predictions
+            trainer = ModelTrainer(processed_data)
+            metrics, next_day_predictions = trainer.train_and_predict_next_day()
+
+            # Display next day predictions prominently at the top
+            display_next_day_predictions(metrics, next_day_predictions)
+
+            # Add a divider before the tabs
+            st.divider()
+
+            # Create main tabs - Overview and Deeper Insights
+            tab1, tab2 = st.tabs(["🏠 Overview", "🔍 Deeper Insights"])
+
+            with tab1:
+                st.header("📈 Quick Overview")
+                st.info("Your behavior prediction is shown above. For detailed analysis, check the 'Deeper Insights' tab.")
+
+            with tab2:
+                st.header("🔍 Detailed Analysis")
+                
+                # Create sub-tabs for all the detailed data
+                sub_tab1, sub_tab2, sub_tab3, sub_tab4, sub_tab5 = st.tabs([
                 "📊 Data Analysis",
                 "🔮 Detailed Predictions",
                 "💊 Medication Management", 
@@ -507,11 +537,14 @@ def main():
             with sub_tab5:
                 configure_alerts(student_name, db)
 
-    except Exception as e:
-        st.error(f"Error processing data: {str(e)}")
-        print(f"Detailed error: {str(e)}")  # Add detailed error logging
-    finally:
-        db.close()
+        except Exception as e:
+            st.error(f"Error processing data: {str(e)}")
+            print(f"Detailed error: {str(e)}")  # Add detailed error logging
+    else:
+        # Show welcoming message when no data is uploaded
+        st.info("👋 Welcome to CALI! Please upload your behavior data CSV file or paste a document link above to get started with predictions.")
+    
+    db.close()
 
 if __name__ == "__main__":
     main()
