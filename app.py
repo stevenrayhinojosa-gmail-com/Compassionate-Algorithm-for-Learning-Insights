@@ -300,7 +300,7 @@ def main():
     db = get_db()
 
     # Add student name input
-    student_name = st.text_input("Student Name", "Default Student")
+    student_name = st.text_input("Student Name", "Default Student", key="student_name_input")
 
 
 
@@ -324,7 +324,8 @@ def main():
         document_link = st.text_input(
             "Or paste document link:",
             placeholder="https://docs.google.com/spreadsheets/...",
-            help="Paste a link to a Google Sheets or other document"
+            help="Paste a link to a Google Sheets or other document",
+            key="document_link_input"
         )
     
     # Only show predictions if data is uploaded
@@ -332,7 +333,10 @@ def main():
         # Add home button when data is loaded
         col1, col2 = st.columns([1, 4])
         with col1:
-            if st.button("🏠 Home", help="Return to upload new data"):
+            if st.button("🏠 Home", help="Return to upload new data", key="home_button"):
+                # Clear the file uploader state
+                for key in list(st.session_state.keys()):
+                    del st.session_state[key]
                 st.rerun()
         
         try:
