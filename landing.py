@@ -10,7 +10,7 @@ st.set_page_config(
 def main():
     
     # Main header
-    st.title("🎓 CALI: Compassionate Algorithm for Learning Insights")
+    st.title("CALI: Compassionate Algorithm for Learning Insights")
     st.subheader("AI-Powered Behavior Prediction & Wellness Management")
     
     # Hero section
