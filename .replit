@@ -44,7 +44,7 @@ author = "agent"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "streamlit run landing.py --server.port 5001"
+args = "streamlit run landing.py --server.port 5001 --server.address 0.0.0.0"
 waitForPort = 5001
 
 [[ports]]
