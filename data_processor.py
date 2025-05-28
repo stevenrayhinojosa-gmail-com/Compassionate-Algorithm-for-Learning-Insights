@@ -12,7 +12,47 @@ class DataProcessor:
         """Initialize with file path and database session"""
         self.db = db
         # Skip the first two metadata rows and use the third row as header
-        self.data = pd.read_csv(file_path, skiprows=2)
+        # Simple approach: read the CSV and manually fix the Date column
+        self.data = pd.read_csv(file_path, skiprows=2, on_bad_lines='skip', dtype=str)
+        
+        # Debug: Check what we actually loaded
+        print("CSV columns loaded:", list(self.data.columns)[:5])
+        print("First few rows of first column:", self.data.iloc[:5, 0].tolist())
+        
+        # If the first column is still just weekday names, try reading differently
+        if all(day in ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday', 'Date'] 
+               for day in self.data.iloc[:10, 0].fillna('').astype(str)):
+            print("Detected split date issue, attempting to read raw file...")
+            
+            # Read raw lines and manually parse
+            with open(file_path, 'r') as f:
+                lines = f.readlines()
+            
+            # Find lines with actual dates (containing both weekday and date)
+            data_rows = []
+            for line in lines[3:]:  # Skip first 3 rows
+                if line.strip() and ',' in line:
+                    parts = line.strip().split(',')
+                    # Look for pattern like "Tuesday" followed by "8/16/2022"
+                    if len(parts) >= 2 and '/' in parts[1] and any(c.isdigit() for c in parts[1]):
+                        # Reconstruct the proper date format
+                        full_date = f"{parts[0]},{parts[1]}"
+                        row_data = [full_date] + parts[2:]
+                        data_rows.append(row_data)
+            
+            if data_rows:
+                # Find maximum row length to handle inconsistent column counts
+                max_cols = max(len(row) for row in data_rows)
+                
+                # Pad shorter rows with empty strings
+                for row in data_rows:
+                    while len(row) < max_cols:
+                        row.append('')
+                
+                # Create DataFrame from properly parsed data
+                headers = ['Date'] + [f'Col_{i}' for i in range(max_cols-1)]
+                self.data = pd.DataFrame(data_rows, columns=headers)
+                print(f"Successfully reconstructed {len(data_rows)} rows with proper dates")
         # Get only the time slot columns (from 7:30 AM to 3:45 PM)
         self.time_slots = [col for col in self.data.columns if ':' in col and ('AM' in col or 'PM' in col)][:33]
         print(f"Found {len(self.time_slots)} time slots")  # Debug log
@@ -23,6 +63,7 @@ class DataProcessor:
             return None
         try:
             date_str = str(date_str).strip()
+<<<<<<< HEAD
 
             # Special date format parsing for "Day, M/D/YYYY" or "Day, M//D/YYYY" formats
             if ',' in date_str:
@@ -50,16 +91,35 @@ class DataProcessor:
                         year = day_year[1:]
                         date_part = f"{month}/{day}/{year}"
 
+=======
+            
+            # Handle the specific format: "Tuesday,8/16/2022" or "Tuesday, 8/16/2022"
+            if ',' in date_str:
+                # Split by comma and take the date part
+                parts = date_str.split(',')
+                if len(parts) >= 2:
+                    date_part = parts[1].strip()
+                else:
+                    date_part = parts[0].strip()
+            else:
+                date_part = date_str
+                
+            # Handle special case where there are double slashes like "8//19/2022"
+            date_part = date_part.replace('//', '/')
+            
+            # Skip non-date entries
+            if date_part.lower() in ['date', ':', '', 'nan']:
+                return None
+                
+>>>>>>> 56c348cdb7964770c039deace67dab7eebfd2236
             # Try to parse the date
             if date_part.count('/') == 2:
-                # Try to handle M/D/YYYY format
                 return pd.to_datetime(date_part, format='%m/%d/%Y', errors='coerce')
             else:
-                # Try more flexible parsing
                 return pd.to_datetime(date_part, errors='coerce')
 
         except Exception as e:
-            print(f"Error parsing date '{date_str}': {str(e)}")  # Debug log
+            print(f"Error parsing date '{date_str}': {str(e)}")
             return None
 
     def process_data(self, student_id: int = None):
@@ -67,17 +127,47 @@ class DataProcessor:
         try:
             print("Starting data processing...")  # Debug log
 
+<<<<<<< HEAD
             # Clean date column first - the actual dates are in the second column (Unnamed: 1)
             # The first column just contains day names
             date_column = 'Unnamed: 1' if 'Unnamed: 1' in self.data.columns else 'Date'
             self.data['date'] = self.data[date_column].apply(self.clean_date)
+=======
+            # Debug: Check the actual data structure
+            print("First 10 rows of Date column:")
+            print(self.data['Date'].head(10).tolist())
+            
+            # Look for rows containing actual dates (format: "Tuesday,8/16/2022")
+            # The CSV has weekday names followed by comma and date (no space after comma)
+            date_pattern = r'[A-Za-z]+,\d+/+\d+/\d+'
+            date_mask = self.data['Date'].astype(str).str.contains(date_pattern, na=False)
+            valid_data = self.data[date_mask].copy()
+            print(f"Found {len(valid_data)} rows with weekday+date patterns")
+
+            if len(valid_data) == 0:
+                # Fallback: Look for any rows with MM/DD/YYYY pattern
+                date_mask = self.data['Date'].astype(str).str.contains(r'\d+/+\d+/\d+', na=False)
+                valid_data = self.data[date_mask].copy()
+                print(f"Fallback: Found {len(valid_data)} rows with date patterns")
+
+            if len(valid_data) == 0:
+                raise ValueError("No valid date rows found in the data")
+
+            # Clean date column
+            valid_data['date'] = valid_data['Date'].apply(self.clean_date)
+>>>>>>> 56c348cdb7964770c039deace67dab7eebfd2236
 
             # Print the first few dates and dtype for verification
-            print("Date column head:", self.data['date'].head())
-            print("Date column dtype:", self.data['date'].dtype)
+            print("Date column head:", valid_data['date'].head())
+            print("Date column dtype:", valid_data['date'].dtype)
 
+<<<<<<< HEAD
             # Remove rows with invalid dates
             df = self.data.dropna(subset=['date']).copy()
+=======
+            # Remove rows with invalid dates after parsing
+            df = valid_data.dropna(subset=['date'])
+>>>>>>> 56c348cdb7964770c039deace67dab7eebfd2236
             print(f"Rows after date cleaning: {len(df)}")  # Debug log
 
             # Convert behavior markers to numerical values
