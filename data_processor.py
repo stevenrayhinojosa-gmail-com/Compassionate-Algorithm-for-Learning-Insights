@@ -19,27 +19,45 @@ class DataProcessor:
 
     def clean_date(self, date_str):
         """Clean and standardize date format"""
-        if pd.isna(date_str) or date_str == '':
+        if pd.isna(date_str) or date_str == '' or str(date_str).strip() == '':
             return None
         try:
+            date_str = str(date_str).strip()
+
             # Special date format parsing for "Day, M/D/YYYY" or "Day, M//D/YYYY" formats
-            if ',' in str(date_str):
+            if ',' in date_str:
                 # Extract just the date part after the comma
                 date_part = date_str.split(',')[1].strip()
             else:
                 date_part = date_str
-                
+
             # Handle special case where there are double slashes
             date_part = date_part.replace('//', '/')
-            
-            # Special handling for some inconsistent formats
+
+            # Fix missing slashes (like "8/182022" should be "8/18/2022")
+            if '/' in date_part and date_part.count('/') == 1:
+                parts = date_part.split('/')
+                if len(parts) == 2 and len(parts[1]) > 4:
+                    # Likely format like "8/182022" - split the second part
+                    month = parts[0]
+                    day_year = parts[1]
+                    if len(day_year) == 6:  # DDYYYY
+                        day = day_year[:2]
+                        year = day_year[2:]
+                        date_part = f"{month}/{day}/{year}"
+                    elif len(day_year) == 5:  # DYYYY
+                        day = day_year[:1]
+                        year = day_year[1:]
+                        date_part = f"{month}/{day}/{year}"
+
+            # Try to parse the date
             if date_part.count('/') == 2:
                 # Try to handle M/D/YYYY format
                 return pd.to_datetime(date_part, format='%m/%d/%Y', errors='coerce')
             else:
                 # Try more flexible parsing
                 return pd.to_datetime(date_part, errors='coerce')
-                
+
         except Exception as e:
             print(f"Error parsing date '{date_str}': {str(e)}")  # Debug log
             return None
@@ -49,15 +67,17 @@ class DataProcessor:
         try:
             print("Starting data processing...")  # Debug log
 
-            # Clean date column first - handle various formats including weekday prefixes
-            self.data['date'] = self.data['Date'].apply(self.clean_date)
+            # Clean date column first - the actual dates are in the second column (Unnamed: 1)
+            # The first column just contains day names
+            date_column = 'Unnamed: 1' if 'Unnamed: 1' in self.data.columns else 'Date'
+            self.data['date'] = self.data[date_column].apply(self.clean_date)
 
             # Print the first few dates and dtype for verification
             print("Date column head:", self.data['date'].head())
             print("Date column dtype:", self.data['date'].dtype)
 
             # Remove rows with invalid dates
-            df = self.data.dropna(subset=['date'])
+            df = self.data.dropna(subset=['date']).copy()
             print(f"Rows after date cleaning: {len(df)}")  # Debug log
 
             # Convert behavior markers to numerical values
@@ -94,6 +114,10 @@ class DataProcessor:
             # Calculate behavioral trends
             df['behavior_trend'] = df['behavior_score'].diff().fillna(0)
             df['weekly_improvement'] = df['rolling_avg_7d'] - df['rolling_avg_7d'].shift(7)
+
+            # Remove rows with NaN behavior scores (days with no valid behavior data)
+            df = df.dropna(subset=['behavior_score'])
+            print(f"Rows after removing NaN behavior scores: {len(df)}")  # Debug log
 
             # Add environmental factors if database session is available
             if self.db and student_id:

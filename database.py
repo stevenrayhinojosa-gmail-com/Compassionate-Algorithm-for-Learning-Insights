@@ -3,8 +3,8 @@ from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 
-# Get database URL from environment variables
-DATABASE_URL = os.getenv("DATABASE_URL")
+# Get database URL from environment variables with fallback to SQLite
+DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./student_behavior.db")
 
 # Create database engine
 engine = create_engine(DATABASE_URL)

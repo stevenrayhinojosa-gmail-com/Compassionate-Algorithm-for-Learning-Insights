@@ -23,11 +23,11 @@ class ModelTrainer:
         ]
 
         # Add environmental factors if available
-        env_features = ['environmental_impact', 'seasonal_score', 
-                       'active_staff_changes', 'noise_level', 
+        env_features = ['environmental_impact', 'seasonal_score',
+                       'active_staff_changes', 'noise_level',
                        'temperature', 'high_sugar_meals',
                        'high_protein_meals', 'active_routine_changes']
-        
+
         for feature in env_features:
             if feature in data.columns:
                 self.numeric_features.append(feature)
@@ -42,7 +42,7 @@ class ModelTrainer:
         ])
 
         categorical_transformer = Pipeline([
-            ('onehot', OneHotEncoder(drop='first', sparse=False))
+            ('onehot', OneHotEncoder(drop='first', sparse_output=False))
         ])
 
         # Create column transformer
@@ -158,21 +158,21 @@ class ModelTrainer:
             features['rolling_std_7d'] = self.data['rolling_std_7d'].iloc[-1]
             features['behavior_trend'] = self.data['behavior_trend'].iloc[-1]
             features['weekly_improvement'] = self.data['weekly_improvement'].iloc[-1]
-            
+
             # Add all environmental factors that were used in training
-            env_features = ['environmental_impact', 'seasonal_score', 
-                           'active_staff_changes', 'noise_level', 
+            env_features = ['environmental_impact', 'seasonal_score',
+                           'active_staff_changes', 'noise_level',
                            'temperature', 'high_sugar_meals',
                            'high_protein_meals', 'active_routine_changes']
-            
+
             for feature in env_features:
                 if feature in self.data.columns:
                     # Use the most recent value for environmental factors
                     features[feature] = self.data[feature].iloc[-1]
-            
+
             # Add time-of-day effects (morning, midday, afternoon patterns)
             hour_of_day = [t.hour + t.minute/60 for t in time_slots]
-            
+
             # Morning dip (8:30-10:00), midday slump (12:30-1:30), end-of-day fatigue (after 2:30)
             # These are common patterns in student behavior
             for i, hour in enumerate(hour_of_day):
